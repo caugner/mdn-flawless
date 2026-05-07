@@ -71,6 +71,7 @@
   }
   button:hover { border-color: var(--accent); color: var(--accent); }
   button.active { border-color: var(--accent); color: var(--accent); }
+  input.active, select.active { border-color: var(--accent); color: var(--accent); }
   .stats { color: var(--muted); margin-left: auto; }
   table {
     width: 100%;
@@ -373,6 +374,13 @@
     };
     writeInputsToHash();
     $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.pos || f.fp || f.tokens.length));
+    $("q").classList.toggle("active", f.tokens.length > 0);
+    $("category").classList.toggle("active", !!f.cat);
+    $("repo").classList.toggle("active", !!f.repo);
+    $("locale").classList.toggle("active", !!f.loc);
+    $("templ").classList.toggle("active", !!f.tmpl);
+    $("sourcepos").classList.toggle("active", !!f.pos);
+    $("filePath").classList.toggle("active", !!f.fp);
 
     // Single pass: build filtered list and per-facet counts (each excluding its own filter).
     state.filtered = [];
