@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Issues</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #222;
+    --muted: #777;
+    --border: #ddd;
+    --accent: #0066cc;
+    --row-alt: #f3f3f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --fg: #e6e6e6;
+      --muted: #999;
+      --border: #333;
+      --accent: #66aaff;
+      --row-alt: #232323;
+    }
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  header {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 14px;
+    z-index: 10;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .row + .row { margin-top: 8px; }
+  label {
+    display: inline-flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--muted);
+    gap: 2px;
+  }
+  input[type=text], select {
+    font: inherit;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 3px;
+    min-width: 140px;
+  }
+  input[type=text].wide { min-width: 320px; }
+  button {
+    font: inherit;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  .stats { color: var(--muted); margin-left: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  tr:nth-child(even) td { background: var(--row-alt); }
+  td.file { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+  td.file .path { color: var(--fg); }
+  td.msg { white-space: pre-wrap; }
+  .pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .empty, .loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--muted);
+  }
+  th[data-sort]::after { content: " ⇅"; opacity: 0.3; }
+  th[data-sort].asc::after { content: " ↑"; opacity: 1; }
+  th[data-sort].desc::after { content: " ↓"; opacity: 1; }
+  .pager { display: flex; gap: 6px; align-items: center; }
+  mark { background: #ffd54f; color: #000; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <label>Search
+      <input type="text" id="q" class="wide" placeholder="message, file, url, redirect, source, slug…" autofocus>
+    </label>
+    <label>Category
+      <select id="category"><option value="">All</option></select>
+    </label>
+    <label>Locale
+      <select id="locale"><option value="">All</option></select>
+    </label>
+    <label>File path contains
+      <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
+    </label>
+    <label>Ignored
+      <select id="ignored">
+        <option value="">All</option>
+        <option value="false">Active only</option>
+        <option value="true">Ignored only</option>
+      </select>
+    </label>
+    <button id="reset">Reset</button>
+    <span class="stats" id="stats">Loading…</span>
+  </div>
+  <div class="row">
+    <div class="pager">
+      <button id="prev">◀ Prev</button>
+      <span id="pageInfo">—</span>
+      <button id="next">Next ▶</button>
+      <label style="flex-direction: row; align-items: center; gap: 4px;">
+        Page size
+        <select id="pageSize">
+          <option>50</option>
+          <option selected>200</option>
+          <option>500</option>
+          <option>2000</option>
+        </select>
+      </label>
+    </div>
+  </div>
+</header>
+
+<div id="content"><div class="loading">Loading issues.json…</div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = {
+    all: [],
+    filtered: [],
+    page: 0,
+    pageSize: 200,
+    sortKey: null,
+    sortDir: 1,
+  };
+
+  // Categorize a message into a coarse bucket. Keep the longest matching prefix.
+  const CATEGORIES = [
+    "page(Doc) not found",
+    "page not found",
+    "CSS syntax not available",
+    "Invalid slug for templ/sidebar",
+    "invalid templ",
+    "Error opening",
+    "Error parsing",
+    "Parse error",
+    "Multiple browser-compat entries",
+    "must be provided",
+    "invalid url",
+    "Error: could not find syntax",
+    "redirected",
+  ];
+  function categorize(msg) {
+    if (!msg) return "(none)";
+    for (const p of CATEGORIES) if (msg.startsWith(p)) return p;
+    // Fall back to the part before ":" or first 4 words.
+    const colon = msg.indexOf(":");
+    if (colon > 0 && colon < 40) return msg.slice(0, colon);
+    return msg.split(/\s+/).slice(0, 4).join(" ");
+  }
+
+  function pairsToObj(pairs) {
+    const o = {};
+    if (!pairs) return o;
+    for (const [k, v] of pairs) o[k] = v;
+    return o;
+  }
+
+  function flatten(data) {
+    const out = [];
+    for (const [filePath, issues] of Object.entries(data)) {
+      for (const it of issues) {
+        const fields = pairsToObj(it.fields);
+        const spans = pairsToObj(it.spans);
+        const message = fields.message || "";
+        const source = fields.source || "";
+        // When a source has no message (e.g. broken-link), the source IS the category.
+        const category = message ? categorize(message) : (source || "(none)");
+        out.push({
+          filePath,
+          file: it.file || "",
+          line: it.line || 0,
+          col: it.col || 0,
+          ignore: !!it.ignore,
+          message,
+          source,
+          redirect: fields.redirect || "",
+          url: fields.url || "",
+          locale: spans.locale || "",
+          slug: spans.slug || "",
+          basepath: spans.basepath || "",
+          templ: spans.templ || "",
+          sidebar: spans.sidebar || "",
+          category,
+          // If the source already serves as the category, don't repeat it.
+          sourceCategory: source && message ? `${source}: ${category}` : category,
+        });
+      }
+    }
+    return out;
+  }
+
+  // Rebuild a select's options from a counts map, preserving the current selection
+  // even if the value is no longer present (shown with count 0).
+  function refreshSelect(sel, counts) {
+    const current = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    const keys = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+    if (current && !counts.has(current)) keys.push(current);
+    for (const v of keys) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = `${v} (${(counts.get(v) || 0).toLocaleString()})`;
+      sel.appendChild(opt);
+    }
+    sel.value = current;
+  }
+
+  const SEARCH_FIELDS = ["message", "filePath", "file", "url", "redirect", "source", "slug", "basepath", "templ", "sidebar"];
+
+  // Returns true if `it` passes every active filter EXCEPT the one named in `except`.
+  function passes(it, f, except) {
+    if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
+    if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
+    if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
+    if (f.ig === "true" && !it.ignore) return false;
+    if (f.ig === "false" && it.ignore) return false;
+    if (f.tokens.length) {
+      const hay = SEARCH_FIELDS.map(k => it[k]).join(" \n ").toLowerCase();
+      for (const t of f.tokens) if (!hay.includes(t)) return false;
+    }
+    return true;
+  }
+
+  // Filter ↔ URL hash mapping. Param names are short and stable.
+  const HASH_FIELDS = [
+    ["q", "q"],
+    ["category", "category"],
+    ["locale", "locale"],
+    ["filePath", "file"],
+    ["ignored", "ignored"],
+  ];
+
+  function readHashIntoInputs() {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+    for (const [id, key] of HASH_FIELDS) {
+      const v = params.get(key) || "";
+      const el = $(id);
+      // For dropdowns, ensure the desired value is selectable before refreshSelect rebuilds it.
+      if (el.tagName === "SELECT" && v && !Array.from(el.options).some(o => o.value === v)) {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v;
+        el.appendChild(opt);
+      }
+      el.value = v;
+    }
+  }
+
+  function writeInputsToHash() {
+    const params = new URLSearchParams();
+    for (const [id, key] of HASH_FIELDS) {
+      const v = $(id).value.trim();
+      if (v) params.set(key, v);
+    }
+    const s = params.toString();
+    const target = s ? "#" + s : location.pathname + location.search;
+    if (location.href.endsWith(target) || (s === "" && !location.hash)) return;
+    history.replaceState(null, "", target);
+  }
+
+  function applyFilters() {
+    const q = $("q").value.trim().toLowerCase();
+    const f = {
+      cat: $("category").value,
+      loc: $("locale").value,
+      fp: $("filePath").value.trim().toLowerCase(),
+      ig: $("ignored").value,
+      tokens: q ? q.split(/\s+/) : [],
+    };
+    writeInputsToHash();
+
+    // Single pass: build filtered list and per-facet counts (each excluding its own filter).
+    state.filtered = [];
+    const catCounts = new Map();
+    const locCounts = new Map();
+    for (const it of state.all) {
+      if (passes(it, f, null)) state.filtered.push(it);
+      if (it.sourceCategory && passes(it, f, "category")) catCounts.set(it.sourceCategory, (catCounts.get(it.sourceCategory) || 0) + 1);
+      if (it.locale && passes(it, f, "locale")) locCounts.set(it.locale, (locCounts.get(it.locale) || 0) + 1);
+    }
+
+    refreshSelect($("category"), catCounts);
+    refreshSelect($("locale"), locCounts);
+
+    if (state.sortKey) sortFiltered();
+    state.page = 0;
+    render();
+  }
+
+  function sortFiltered() {
+    const k = state.sortKey, d = state.sortDir;
+    state.filtered.sort((a, b) => {
+      const av = a[k], bv = b[k];
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * d;
+      return String(av).localeCompare(String(bv)) * d;
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  function highlight(text, tokens) {
+    let s = escapeHtml(text);
+    if (!tokens.length) return s;
+    for (const t of tokens) {
+      if (!t) continue;
+      const re = new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+      s = s.replace(re, "<mark>$1</mark>");
+    }
+    return s;
+  }
+
+  function render() {
+    const total = state.filtered.length;
+    const grandTotal = state.all.length;
+    const ps = state.pageSize;
+    const pages = Math.max(1, Math.ceil(total / ps));
+    if (state.page >= pages) state.page = pages - 1;
+    if (state.page < 0) state.page = 0;
+    const start = state.page * ps;
+    const slice = state.filtered.slice(start, start + ps);
+
+    $("stats").textContent = `${total.toLocaleString()} of ${grandTotal.toLocaleString()} issues`;
+    $("pageInfo").textContent = total
+      ? `${(start + 1).toLocaleString()}–${Math.min(start + ps, total).toLocaleString()} · page ${state.page + 1} / ${pages}`
+      : "—";
+
+    const tokens = $("q").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const content = $("content");
+
+    if (!total) {
+      content.innerHTML = '<div class="empty">No matching issues.</div>';
+      return;
+    }
+
+    const rows = slice.map(it => {
+      const loc = it.locale ? `<span class="pill">${escapeHtml(it.locale)}</span>` : "";
+      const ig = it.ignore ? `<span class="pill" title="ignored">ignored</span>` : "";
+      const slug = it.slug ? `<div><span class="pill">slug</span>${highlight(it.slug, tokens)}</div>` : "";
+      const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
+      const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
+      const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
+      return `<tr>
+        <td class="file"><span class="path">${highlight(it.filePath || "(none)", tokens)}</span>${escapeHtml(lineCol)}</td>
+        <td>${escapeHtml(it.sourceCategory)}</td>
+        <td class="msg">${loc}${ig}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
+      </tr>`;
+    }).join("");
+
+    content.innerHTML = `<table>
+      <colgroup><col style="width:38%"><col style="width:18%"><col style="width:44%"></colgroup>
+      <thead><tr>
+        <th data-sort="filePath" class="${sortClass('filePath')}">File</th>
+        <th data-sort="sourceCategory" class="${sortClass('sourceCategory')}">Category</th>
+        <th data-sort="message" class="${sortClass('message')}">Message</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    for (const th of content.querySelectorAll("th[data-sort]")) {
+      th.addEventListener("click", () => {
+        const k = th.dataset.sort;
+        if (state.sortKey === k) state.sortDir = -state.sortDir;
+        else { state.sortKey = k; state.sortDir = 1; }
+        sortFiltered();
+        render();
+      });
+    }
+  }
+
+  function sortClass(k) {
+    if (state.sortKey !== k) return "";
+    return state.sortDir > 0 ? "asc" : "desc";
+  }
+
+  function bind() {
+    const onChange = () => applyFilters();
+    let qTimer;
+    $("q").addEventListener("input", () => {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(onChange, 120);
+    });
+    $("filePath").addEventListener("input", () => {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(onChange, 120);
+    });
+    for (const id of ["category", "locale", "ignored"]) $(id).addEventListener("change", onChange);
+    $("pageSize").addEventListener("change", () => {
+      state.pageSize = parseInt($("pageSize").value, 10) || 200;
+      state.page = 0;
+      render();
+    });
+    $("prev").addEventListener("click", () => { state.page--; render(); });
+    $("next").addEventListener("click", () => { state.page++; render(); });
+    $("reset").addEventListener("click", () => {
+      $("q").value = "";
+      $("filePath").value = "";
+      $("category").value = "";
+      $("locale").value = "";
+      $("ignored").value = "";
+      state.sortKey = null;
+      applyFilters();
+    });
+  }
+
+  async function load() {
+    const t0 = performance.now();
+    let res;
+    try {
+      res = await fetch("issues.json");
+    } catch (e) {
+      $("content").innerHTML = `<div class="empty">Failed to fetch issues.json: ${escapeHtml(e.message)}.<br>Serve this directory over HTTP, e.g. <code>python3 -m http.server</code>.</div>`;
+      return;
+    }
+    if (!res.ok) {
+      $("content").innerHTML = `<div class="empty">issues.json: HTTP ${res.status}</div>`;
+      return;
+    }
+    const data = await res.json();
+    state.all = flatten(data);
+    const t1 = performance.now();
+
+    bind();
+    readHashIntoInputs();
+    applyFilters();
+    window.addEventListener("hashchange", () => {
+      readHashIntoInputs();
+      applyFilters();
+    });
+    console.log(`Loaded ${state.all.length} issues in ${(t1 - t0).toFixed(0)}ms`);
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
