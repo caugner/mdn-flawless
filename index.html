@@ -513,7 +513,7 @@
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const split = splitRepoPrefix(it.filePath || "", it.locale);
-      const repoPill = split.repo ? `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(split.repo)}" title="Filter by repo">${escapeHtml(split.repo)}</button>` : "";
+      const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" title="Filter by repo">${escapeHtml(it.repo)}</button>`;
       const pathHtml = `<span class="path">${highlight(split.rest || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
       const ghUrl = githubUrl(it);
       const fileCell = ghUrl
