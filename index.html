@@ -115,6 +115,11 @@
     text-align: center;
     color: var(--muted);
   }
+  .loading progress {
+    width: min(420px, 70vw);
+    height: 8px;
+    margin-top: 12px;
+  }
   th[data-sort]::after { content: " ⇅"; opacity: 0.3; }
   th[data-sort].asc::after { content: " ↑"; opacity: 1; }
   th[data-sort].desc::after { content: " ↓"; opacity: 1; }
@@ -161,7 +166,12 @@
   </div>
 </header>
 
-<div id="content"><div class="loading">Loading issues.json…</div></div>
+<div id="content">
+  <div class="loading">
+    <div id="loadingLabel">Loading issues.json…</div>
+    <progress id="loadingBar" value="0" max="1"></progress>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -496,8 +506,17 @@
     });
   }
 
+  function fmtBytes(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + " GB";
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + " KB";
+    return n + " B";
+  }
+
   async function load() {
     const t0 = performance.now();
+    const label = $("loadingLabel");
+    const bar = $("loadingBar");
     let res;
     try {
       res = await fetch("issues.json");
@@ -509,7 +528,37 @@
       $("content").innerHTML = `<div class="empty">issues.json: HTTP ${res.status}</div>`;
       return;
     }
-    const data = await res.json();
+
+    // Stream the body so we can show real download progress.
+    const total = parseInt(res.headers.get("content-length") || "0", 10);
+    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+    let text;
+    if (reader) {
+      const chunks = [];
+      let received = 0;
+      if (total) bar.max = total; else bar.removeAttribute("value"); // indeterminate
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (total) {
+          bar.value = received;
+          label.textContent = `Loading issues.json… ${fmtBytes(received)} / ${fmtBytes(total)} (${((received / total) * 100).toFixed(0)}%)`;
+        } else {
+          label.textContent = `Loading issues.json… ${fmtBytes(received)}`;
+        }
+      }
+      text = await new Blob(chunks).text();
+    } else {
+      text = await res.text();
+    }
+
+    label.textContent = "Parsing…";
+    bar.removeAttribute("value");
+    // Yield to the browser so the "Parsing…" label paints before the JSON.parse blocks.
+    await new Promise(r => setTimeout(r, 0));
+    const data = JSON.parse(text);
     state.all = flatten(data);
     const t1 = performance.now();
 
