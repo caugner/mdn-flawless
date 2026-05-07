@@ -70,6 +70,7 @@
     cursor: pointer;
   }
   button:hover { border-color: var(--accent); color: var(--accent); }
+  button.active { border-color: var(--accent); color: var(--accent); }
   .stats { color: var(--muted); margin-left: auto; }
   table {
     width: 100%;
@@ -158,7 +159,6 @@
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
-    <button id="reset">Reset</button>
     <span class="stats" id="stats">Loading…</span>
   </div>
   <div class="row">
@@ -175,6 +175,7 @@
           <option>2000</option>
         </select>
       </label>
+      <button id="reset">Reset</button>
     </div>
   </div>
 </header>
@@ -371,6 +372,7 @@
       tokens: q ? q.split(/\s+/) : [],
     };
     writeInputsToHash();
+    $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.pos || f.fp || f.tokens.length));
 
     // Single pass: build filtered list and per-facet counts (each excluding its own filter).
     state.filtered = [];
