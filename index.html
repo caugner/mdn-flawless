@@ -112,6 +112,7 @@
     color: var(--muted);
     margin-right: 4px;
   }
+  button.pill { background: transparent; }
   .empty, .loading {
     padding: 40px;
     text-align: center;
@@ -501,8 +502,8 @@
     const hideLocale = !!$("locale").value;
     const hideTempl = !!$("templ").value;
     const rows = slice.map(it => {
-      const loc = it.locale && !hideLocale ? `<span class="pill">${escapeHtml(it.locale)}</span>` : "";
-      const tmpl = it.templ && !hideTempl ? `<span class="pill" title="macro">${escapeHtml(it.templ)}</span>` : "";
+      const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" title="Filter by locale">${escapeHtml(it.locale)}</button>` : "";
+      const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" title="Filter by macro">${escapeHtml(it.templ)}</button>` : "";
       const slugText = highlight(it.slug, tokens);
       const slugLinked = it.locale && it.slug
         ? `<a href="https://developer.mozilla.org/${escapeHtml(mdnLocale(it.locale))}/docs/${escapeHtml(it.slug)}" target="_blank" rel="noopener">${slugText}</a>`
@@ -512,12 +513,12 @@
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const split = splitRepoPrefix(it.filePath || "", it.locale);
-      const repoPill = split.repo ? `<span class="pill" title="repo">${escapeHtml(split.repo)}</span>` : "";
-      const pathHtml = `${repoPill}<span class="path">${highlight(split.rest || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
+      const repoPill = split.repo ? `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(split.repo)}" title="Filter by repo">${escapeHtml(split.repo)}</button>` : "";
+      const pathHtml = `<span class="path">${highlight(split.rest || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
       const ghUrl = githubUrl(it);
       const fileCell = ghUrl
-        ? `<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
-        : pathHtml;
+        ? `${repoPill}<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
+        : `${repoPill}${pathHtml}`;
       return `<tr>
         <td class="file">${fileCell}</td>
         <td>${escapeHtml(it.sourceCategory)}</td>
@@ -567,6 +568,14 @@
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
       render();
+    });
+    $("content").addEventListener("click", e => {
+      const btn = e.target.closest("button.pill[data-filter]");
+      if (!btn) return;
+      const sel = $(btn.dataset.filter);
+      if (!sel) return;
+      sel.value = btn.dataset.value;
+      applyFilters();
     });
     $("prev").addEventListener("click", () => { state.page--; render(); });
     $("next").addEventListener("click", () => { state.page++; render(); });
