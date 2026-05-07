@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Issues</title>
+<title>MDN Flawless</title>
 <style>
   :root {
     --bg: #fafafa;
@@ -583,6 +583,7 @@
     await new Promise(r => setTimeout(r, 0));
     const data = JSON.parse(text);
     state.all = flatten(data);
+    document.title = `MDN Flawless (${state.all.length.toLocaleString()} issues)`;
     const t1 = performance.now();
 
     bind();
