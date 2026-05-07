@@ -144,6 +144,13 @@
     <label>Macro (templ)
       <select id="templ"><option value="">All</option></select>
     </label>
+    <label>Source position
+      <select id="sourcepos">
+        <option value="">All</option>
+        <option value="yes">With</option>
+        <option value="no">Without</option>
+      </select>
+    </label>
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
@@ -284,6 +291,8 @@
     if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
     if (except !== "templ" && f.tmpl && it.templ !== f.tmpl) return false;
+    if (except !== "sourcepos" && f.pos === "yes" && !it.line) return false;
+    if (except !== "sourcepos" && f.pos === "no" && it.line) return false;
     if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
     if (f.tokens.length) {
       const hay = SEARCH_FIELDS.map(k => it[k]).join(" \n ").toLowerCase();
@@ -298,6 +307,7 @@
     ["category", "category"],
     ["locale", "locale"],
     ["templ", "templ"],
+    ["sourcepos", "pos"],
     ["filePath", "file"],
   ];
 
@@ -335,6 +345,7 @@
       cat: $("category").value,
       loc: $("locale").value,
       tmpl: $("templ").value,
+      pos: $("sourcepos").value,
       fp: $("filePath").value.trim().toLowerCase(),
       tokens: q ? q.split(/\s+/) : [],
     };
@@ -345,16 +356,21 @@
     const catCounts = new Map();
     const locCounts = new Map();
     const tmplCounts = new Map();
+    let posWith = 0, posWithout = 0;
     for (const it of state.all) {
       if (passes(it, f, null)) state.filtered.push(it);
       if (it.sourceCategory && passes(it, f, "category")) catCounts.set(it.sourceCategory, (catCounts.get(it.sourceCategory) || 0) + 1);
       if (it.locale && passes(it, f, "locale")) locCounts.set(it.locale, (locCounts.get(it.locale) || 0) + 1);
       if (it.templ && passes(it, f, "templ")) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
+      if (passes(it, f, "sourcepos")) { if (it.line) posWith++; else posWithout++; }
     }
 
     refreshSelect($("category"), catCounts);
     refreshSelect($("locale"), locCounts);
     refreshSelect($("templ"), tmplCounts);
+    const posSel = $("sourcepos");
+    posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
+    posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
 
     if (state.sortKey) sortFiltered();
     state.page = 0;
@@ -523,7 +539,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "locale", "templ"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "locale", "templ", "sourcepos"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -537,6 +553,7 @@
       $("category").value = "";
       $("locale").value = "";
       $("templ").value = "";
+      $("sourcepos").value = "";
       state.sortKey = null;
       applyFilters();
     });
