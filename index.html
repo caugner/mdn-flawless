@@ -134,13 +134,6 @@
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
-    <label>Ignored
-      <select id="ignored">
-        <option value="">All</option>
-        <option value="false">Active only</option>
-        <option value="true">Ignored only</option>
-      </select>
-    </label>
     <button id="reset">Reset</button>
     <span class="stats" id="stats">Loading…</span>
   </div>
@@ -223,7 +216,6 @@
           file: it.file || "",
           line: it.line || 0,
           col: it.col || 0,
-          ignore: !!it.ignore,
           message,
           source,
           redirect: fields.redirect || "",
@@ -265,8 +257,6 @@
     if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
     if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
-    if (f.ig === "true" && !it.ignore) return false;
-    if (f.ig === "false" && it.ignore) return false;
     if (f.tokens.length) {
       const hay = SEARCH_FIELDS.map(k => it[k]).join(" \n ").toLowerCase();
       for (const t of f.tokens) if (!hay.includes(t)) return false;
@@ -280,7 +270,6 @@
     ["category", "category"],
     ["locale", "locale"],
     ["filePath", "file"],
-    ["ignored", "ignored"],
   ];
 
   function readHashIntoInputs() {
@@ -317,7 +306,6 @@
       cat: $("category").value,
       loc: $("locale").value,
       fp: $("filePath").value.trim().toLowerCase(),
-      ig: $("ignored").value,
       tokens: q ? q.split(/\s+/) : [],
     };
     writeInputsToHash();
@@ -391,7 +379,6 @@
 
     const rows = slice.map(it => {
       const loc = it.locale ? `<span class="pill">${escapeHtml(it.locale)}</span>` : "";
-      const ig = it.ignore ? `<span class="pill" title="ignored">ignored</span>` : "";
       const slug = it.slug ? `<div><span class="pill">slug</span>${highlight(it.slug, tokens)}</div>` : "";
       const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
@@ -399,7 +386,7 @@
       return `<tr>
         <td class="file"><span class="path">${highlight(it.filePath || "(none)", tokens)}</span>${escapeHtml(lineCol)}</td>
         <td>${escapeHtml(it.sourceCategory)}</td>
-        <td class="msg">${loc}${ig}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
+        <td class="msg">${loc}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
       </tr>`;
     }).join("");
 
@@ -440,7 +427,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "locale", "ignored"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "locale"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -453,7 +440,6 @@
       $("filePath").value = "";
       $("category").value = "";
       $("locale").value = "";
-      $("ignored").value = "";
       state.sortKey = null;
       applyFilters();
     });
