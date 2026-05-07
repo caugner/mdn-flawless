@@ -138,6 +138,9 @@
     <label>Category
       <select id="category"><option value="">All</option></select>
     </label>
+    <label>Repository
+      <select id="repo"><option value="">All</option></select>
+    </label>
     <label>Locale
       <select id="locale"><option value="">All</option></select>
     </label>
@@ -232,6 +235,18 @@
     return o;
   }
 
+  // Identify the repo from the file path. de locale lives in translated-content-de
+  // despite the stored path saying translated-content/files.
+  const REPO_PREFIXES = ["content", "translated-content", "curriculum"];
+  function detectRepo(filePath, locale) {
+    for (const r of REPO_PREFIXES) {
+      if (filePath.startsWith(r + "/")) {
+        return r === "translated-content" && locale === "de" ? "translated-content-de" : r;
+      }
+    }
+    return "unknown";
+  }
+
   function flatten(data) {
     const out = [];
     for (const [rawFilePath, issues] of Object.entries(data)) {
@@ -243,6 +258,7 @@
         const source = fields.source || "";
         // When a source has no message (e.g. broken-link), the source IS the category.
         const category = message ? categorize(message) : (source || "(none)");
+        const locale = spans.locale || "";
         out.push({
           filePath,
           file: stripPathPrefix(it.file || ""),
@@ -254,7 +270,7 @@
           source,
           redirect: stripPathPrefix(fields.redirect || ""),
           url: fields.url || "",
-          locale: spans.locale || "",
+          locale,
           slug: spans.slug || "",
           basepath: spans.basepath || "",
           templ: spans.templ || "",
@@ -262,6 +278,7 @@
           category,
           // If the source already serves as the category, don't repeat it.
           sourceCategory: source && message ? `${source}: ${category}` : category,
+          repo: detectRepo(filePath, locale),
         });
       }
     }
@@ -289,6 +306,7 @@
   // Returns true if `it` passes every active filter EXCEPT the one named in `except`.
   function passes(it, f, except) {
     if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
+    if (except !== "repo" && f.repo && it.repo !== f.repo) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
     if (except !== "templ" && f.tmpl && it.templ !== f.tmpl) return false;
     if (except !== "sourcepos" && f.pos === "yes" && !it.line) return false;
@@ -305,6 +323,7 @@
   const HASH_FIELDS = [
     ["q", "q"],
     ["category", "category"],
+    ["repo", "repo"],
     ["locale", "locale"],
     ["templ", "templ"],
     ["sourcepos", "pos"],
@@ -343,6 +362,7 @@
     const q = $("q").value.trim().toLowerCase();
     const f = {
       cat: $("category").value,
+      repo: $("repo").value,
       loc: $("locale").value,
       tmpl: $("templ").value,
       pos: $("sourcepos").value,
@@ -354,18 +374,21 @@
     // Single pass: build filtered list and per-facet counts (each excluding its own filter).
     state.filtered = [];
     const catCounts = new Map();
+    const repoCounts = new Map();
     const locCounts = new Map();
     const tmplCounts = new Map();
     let posWith = 0, posWithout = 0;
     for (const it of state.all) {
       if (passes(it, f, null)) state.filtered.push(it);
       if (it.sourceCategory && passes(it, f, "category")) catCounts.set(it.sourceCategory, (catCounts.get(it.sourceCategory) || 0) + 1);
+      if (it.repo && passes(it, f, "repo")) repoCounts.set(it.repo, (repoCounts.get(it.repo) || 0) + 1);
       if (it.locale && passes(it, f, "locale")) locCounts.set(it.locale, (locCounts.get(it.locale) || 0) + 1);
       if (it.templ && passes(it, f, "templ")) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
       if (passes(it, f, "sourcepos")) { if (it.line) posWith++; else posWithout++; }
     }
 
     refreshSelect($("category"), catCounts);
+    refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
     refreshSelect($("templ"), tmplCounts);
     const posSel = $("sourcepos");
@@ -539,7 +562,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "locale", "templ", "sourcepos"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "repo", "locale", "templ", "sourcepos"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -551,6 +574,7 @@
       $("q").value = "";
       $("filePath").value = "";
       $("category").value = "";
+      $("repo").value = "";
       $("locale").value = "";
       $("templ").value = "";
       $("sourcepos").value = "";
