@@ -525,7 +525,7 @@
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const split = splitRepoPrefix(it.filePath || "", it.locale);
       const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" title="Filter by repo">${escapeHtml(it.repo)}</button>`;
-      const pathHtml = `<span class="path">${highlight(split.rest || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
+      const pathHtml = split.rest ? `<span class="path">${highlight(split.rest, tokens)}</span>${escapeHtml(lineCol)}` : "";
       const ghUrl = githubUrl(it);
       const fileCell = ghUrl
         ? `${repoPill}<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
