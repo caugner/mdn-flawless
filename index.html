@@ -369,11 +369,15 @@
   }
 
   // Split off the repo prefix (content/, translated-content/, curriculum/) for display as a pill.
-  function splitRepoPrefix(fp) {
+  // de locale lives in translated-content-de despite the stored path saying translated-content/files.
+  function splitRepoPrefix(fp, locale) {
     const repos = ["content", "translated-content", "curriculum"];
     for (const r of repos) {
       const p = r + "/";
-      if (fp.startsWith(p)) return { repo: r, rest: fp.slice(p.length) };
+      if (fp.startsWith(p)) {
+        const repo = r === "translated-content" && locale === "de" ? "translated-content-de" : r;
+        return { repo, rest: fp.slice(p.length) };
+      }
     }
     return { repo: "", rest: fp };
   }
@@ -388,7 +392,7 @@
     let folder = m ? "files" : null;
     if (!m) {
       m = fp.match(/^translated-content\/files\/(.+)$/);
-      if (m) { repo = "translated-content"; folder = "files"; }
+      if (m) { repo = it.locale === "de" ? "translated-content-de" : "translated-content"; folder = "files"; }
     }
     if (!m) {
       m = fp.match(/^curriculum\/curriculum\/(.+)$/);
@@ -453,7 +457,7 @@
       const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
-      const split = splitRepoPrefix(it.filePath || "");
+      const split = splitRepoPrefix(it.filePath || "", it.locale);
       const repoPill = split.repo ? `<span class="pill" title="repo">${escapeHtml(split.repo)}</span>` : "";
       const pathHtml = `${repoPill}<span class="path">${highlight(split.rest || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
       const ghUrl = githubUrl(it);
