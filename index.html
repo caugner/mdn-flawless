@@ -229,6 +229,8 @@
           file: stripPathPrefix(it.file || ""),
           line: it.line || 0,
           col: it.col || 0,
+          endLine: it.end_line || 0,
+          endCol: it.end_col || 0,
           message,
           source,
           redirect: stripPathPrefix(fields.redirect || ""),
@@ -357,17 +359,26 @@
   }
 
   // Build a GitHub blob URL for paths under content/files/ or translated-content/files/.
-  // Line is 0-based in issues.json; GitHub anchors are 1-based.
-  function githubUrl(filePath, line) {
-    let m = filePath.match(/^content\/files\/(.+)$/);
+  // line/col/end_line/end_col are 0-based in issues.json; GitHub anchors are 1-based.
+  function githubUrl(it) {
+    const fp = it.filePath;
+    if (!fp) return null;
+    let m = fp.match(/^content\/files\/(.+)$/);
     let repo = m ? "content" : null;
     if (!m) {
-      m = filePath.match(/^translated-content\/files\/(.+)$/);
+      m = fp.match(/^translated-content\/files\/(.+)$/);
       if (m) repo = "translated-content";
     }
     if (!m) return null;
     const base = `https://github.com/mdn/${repo}/blob/main/files/${m[1]}`;
-    return line ? `${base}?plain=1#L${line + 1}` : base;
+    if (!it.line) return base;
+    let anchor = `L${it.line + 1}`;
+    if (it.col) anchor += `C${it.col + 1}`;
+    if (it.endLine && (it.endLine !== it.line || it.endCol !== it.col)) {
+      anchor += `-L${it.endLine + 1}`;
+      if (it.endCol) anchor += `C${it.endCol + 1}`;
+    }
+    return `${base}?plain=1#${anchor}`;
   }
 
   function escapeHtml(s) {
@@ -418,7 +429,7 @@
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const pathHtml = `<span class="path">${highlight(it.filePath || "(none)", tokens)}</span>${escapeHtml(lineCol)}`;
-      const ghUrl = it.filePath ? githubUrl(it.filePath, it.line) : null;
+      const ghUrl = githubUrl(it);
       const fileCell = ghUrl
         ? `<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
         : pathHtml;
