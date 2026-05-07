@@ -368,19 +368,24 @@
     });
   }
 
-  // Build a GitHub blob URL for paths under content/files/ or translated-content/files/.
+  // Build a GitHub blob URL for paths under content/files/, translated-content/files/, or curriculum/curriculum/.
   // line/col/end_line/end_col are 0-based in issues.json; GitHub anchors are 1-based.
   function githubUrl(it) {
     const fp = it.filePath;
     if (!fp) return null;
     let m = fp.match(/^content\/files\/(.+)$/);
     let repo = m ? "content" : null;
+    let folder = m ? "files" : null;
     if (!m) {
       m = fp.match(/^translated-content\/files\/(.+)$/);
-      if (m) repo = "translated-content";
+      if (m) { repo = "translated-content"; folder = "files"; }
+    }
+    if (!m) {
+      m = fp.match(/^curriculum\/curriculum\/(.+)$/);
+      if (m) { repo = "curriculum"; folder = "curriculum"; }
     }
     if (!m) return null;
-    const base = `https://github.com/mdn/${repo}/blob/main/files/${m[1]}`;
+    const base = `https://github.com/mdn/${repo}/blob/main/${folder}/${m[1]}`;
     if (!it.line) return base;
     let anchor = `L${it.line + 1}`;
     if (it.col) anchor += `C${it.col + 1}`;
