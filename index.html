@@ -131,6 +131,9 @@
     <label>Locale
       <select id="locale"><option value="">All</option></select>
     </label>
+    <label>Macro (templ)
+      <select id="templ"><option value="">All</option></select>
+    </label>
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
@@ -263,6 +266,7 @@
   function passes(it, f, except) {
     if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
+    if (except !== "templ" && f.tmpl && it.templ !== f.tmpl) return false;
     if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
     if (f.tokens.length) {
       const hay = SEARCH_FIELDS.map(k => it[k]).join(" \n ").toLowerCase();
@@ -276,6 +280,7 @@
     ["q", "q"],
     ["category", "category"],
     ["locale", "locale"],
+    ["templ", "templ"],
     ["filePath", "file"],
   ];
 
@@ -312,6 +317,7 @@
     const f = {
       cat: $("category").value,
       loc: $("locale").value,
+      tmpl: $("templ").value,
       fp: $("filePath").value.trim().toLowerCase(),
       tokens: q ? q.split(/\s+/) : [],
     };
@@ -321,14 +327,17 @@
     state.filtered = [];
     const catCounts = new Map();
     const locCounts = new Map();
+    const tmplCounts = new Map();
     for (const it of state.all) {
       if (passes(it, f, null)) state.filtered.push(it);
       if (it.sourceCategory && passes(it, f, "category")) catCounts.set(it.sourceCategory, (catCounts.get(it.sourceCategory) || 0) + 1);
       if (it.locale && passes(it, f, "locale")) locCounts.set(it.locale, (locCounts.get(it.locale) || 0) + 1);
+      if (it.templ && passes(it, f, "templ")) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
     }
 
     refreshSelect($("category"), catCounts);
     refreshSelect($("locale"), locCounts);
+    refreshSelect($("templ"), tmplCounts);
 
     if (state.sortKey) sortFiltered();
     state.page = 0;
@@ -386,6 +395,7 @@
 
     const rows = slice.map(it => {
       const loc = it.locale ? `<span class="pill">${escapeHtml(it.locale)}</span>` : "";
+      const tmpl = it.templ ? `<span class="pill" title="macro">${escapeHtml(it.templ)}</span>` : "";
       const slug = it.slug ? `<div><span class="pill">slug</span>${highlight(it.slug, tokens)}</div>` : "";
       const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
@@ -393,7 +403,7 @@
       return `<tr>
         <td class="file"><span class="path">${highlight(it.filePath || "(none)", tokens)}</span>${escapeHtml(lineCol)}</td>
         <td>${escapeHtml(it.sourceCategory)}</td>
-        <td class="msg">${loc}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
+        <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
       </tr>`;
     }).join("");
 
@@ -434,7 +444,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "locale"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "locale", "templ"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -447,6 +457,7 @@
       $("filePath").value = "";
       $("category").value = "";
       $("locale").value = "";
+      $("templ").value = "";
       state.sortKey = null;
       applyFilters();
     });
