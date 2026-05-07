@@ -194,6 +194,12 @@
     return msg.split(/\s+/).slice(0, 4).join(" ");
   }
 
+  // Strip absolute path prefixes leading up to `(translated-)content/files/`.
+  const PATH_PREFIX_RE = /\/[^\s]*?(?=(?:translated-content|content)\/files\/)/g;
+  function stripPathPrefix(s) {
+    return s ? s.replace(PATH_PREFIX_RE, "") : s;
+  }
+
   function pairsToObj(pairs) {
     const o = {};
     if (!pairs) return o;
@@ -203,22 +209,23 @@
 
   function flatten(data) {
     const out = [];
-    for (const [filePath, issues] of Object.entries(data)) {
+    for (const [rawFilePath, issues] of Object.entries(data)) {
+      const filePath = stripPathPrefix(rawFilePath);
       for (const it of issues) {
         const fields = pairsToObj(it.fields);
         const spans = pairsToObj(it.spans);
-        const message = fields.message || "";
+        const message = stripPathPrefix(fields.message || "");
         const source = fields.source || "";
         // When a source has no message (e.g. broken-link), the source IS the category.
         const category = message ? categorize(message) : (source || "(none)");
         out.push({
           filePath,
-          file: it.file || "",
+          file: stripPathPrefix(it.file || ""),
           line: it.line || 0,
           col: it.col || 0,
           message,
           source,
-          redirect: fields.redirect || "",
+          redirect: stripPathPrefix(fields.redirect || ""),
           url: fields.url || "",
           locale: spans.locale || "",
           slug: spans.slug || "",
