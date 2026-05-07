@@ -521,7 +521,7 @@
         : `${repoPill}${pathHtml}`;
       return `<tr>
         <td class="file">${fileCell}</td>
-        <td>${escapeHtml(it.sourceCategory)}</td>
+        <td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" title="Filter by category">${escapeHtml(it.sourceCategory)}</button></td>
         <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
       </tr>`;
     }).join("");
