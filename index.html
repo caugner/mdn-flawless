@@ -517,7 +517,16 @@
     const start = state.page * ps;
     const slice = state.filtered.slice(start, start + ps);
 
-    $("stats").textContent = `${total.toLocaleString()} of ${grandTotal.toLocaleString()} issues`;
+    const files = new Set();
+    const slugs = new Set();
+    for (const it of state.filtered) {
+      if (it.filePath) files.add(it.filePath);
+      if (it.slug) slugs.add(it.slug);
+    }
+    const fileSlugStat = files.size === slugs.size
+      ? `${files.size.toLocaleString()} files/slugs`
+      : `${files.size.toLocaleString()} files · ${slugs.size.toLocaleString()} slugs`;
+    $("stats").textContent = `${total.toLocaleString()} of ${grandTotal.toLocaleString()} issues · ${fileSlugStat}`;
     $("pageInfo").textContent = total
       ? `${(start + 1).toLocaleString()}–${Math.min(start + ps, total).toLocaleString()} · page ${state.page + 1} / ${pages}`
       : "—";
