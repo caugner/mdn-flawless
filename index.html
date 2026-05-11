@@ -561,24 +561,31 @@
     const cols = hideCategory
       ? `<col style="width:42%"><col style="width:58%">`
       : `<col style="width:38%"><col style="width:18%"><col style="width:44%">`;
-    const catHead = hideCategory ? "" : `<th data-sort="sourceCategory" class="${sortClass('sourceCategory')}">Category</th>`;
+    const catHead = hideCategory ? "" : `<th data-sort="sourceCategory" class="${sortClass('sourceCategory')}" tabindex="0" role="button" aria-sort="${ariaSort('sourceCategory')}">Category</th>`;
     content.innerHTML = `<table>
       <colgroup>${cols}</colgroup>
       <thead><tr>
-        <th data-sort="filePath" class="${sortClass('filePath')}">File</th>
+        <th data-sort="filePath" class="${sortClass('filePath')}" tabindex="0" role="button" aria-sort="${ariaSort('filePath')}">File</th>
         ${catHead}
-        <th data-sort="message" class="${sortClass('message')}">Message</th>
+        <th data-sort="message" class="${sortClass('message')}" tabindex="0" role="button" aria-sort="${ariaSort('message')}">Message</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 
     for (const th of content.querySelectorAll("th[data-sort]")) {
-      th.addEventListener("click", () => {
+      const activate = () => {
         const k = th.dataset.sort;
         if (state.sortKey === k) state.sortDir = -state.sortDir;
         else { state.sortKey = k; state.sortDir = 1; }
         sortFiltered();
         render();
+      };
+      th.addEventListener("click", activate);
+      th.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          activate();
+        }
       });
     }
   }
@@ -586,6 +593,11 @@
   function sortClass(k) {
     if (state.sortKey !== k) return "";
     return state.sortDir > 0 ? "asc" : "desc";
+  }
+
+  function ariaSort(k) {
+    if (state.sortKey !== k) return "none";
+    return state.sortDir > 0 ? "ascending" : "descending";
   }
 
   function bind() {
