@@ -70,6 +70,7 @@
     cursor: pointer;
   }
   button:hover { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border); color: var(--fg); }
   button.active { border-color: var(--accent); color: var(--accent); }
   input.active, select.active { border-color: var(--accent); color: var(--accent); }
   .stats { color: var(--muted); margin-left: auto; }
@@ -184,9 +185,9 @@
   </div>
   <div class="row">
     <div class="pager">
-      <button id="prev">◀ Prev</button>
+      <button id="prev" aria-label="Previous page">◀ Prev</button>
       <span id="pageInfo">—</span>
-      <button id="next">Next ▶</button>
+      <button id="next" aria-label="Next page">Next ▶</button>
       <label style="flex-direction: row; align-items: center; gap: 4px;">
         Page size
         <select id="pageSize">
@@ -520,6 +521,8 @@
     $("pageInfo").textContent = total
       ? `${(start + 1).toLocaleString()}–${Math.min(start + ps, total).toLocaleString()} · page ${state.page + 1} / ${pages}`
       : "—";
+    $("prev").disabled = state.page <= 0;
+    $("next").disabled = state.page >= pages - 1;
 
     const tokens = $("q").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const content = $("content");
@@ -533,8 +536,8 @@
     const hideTempl = !!$("templ").value;
     const hideCategory = !!$("category").value;
     const rows = slice.map(it => {
-      const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" title="Filter by locale">${escapeHtml(it.locale)}</button>` : "";
-      const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" title="Filter by macro">${escapeHtml(it.templ)}</button>` : "";
+      const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
+      const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
       const slugText = highlight(it.slug, tokens);
       const slugLinked = it.locale && it.slug
         ? `<a href="https://developer.mozilla.org/${escapeHtml(mdnLocale(it.locale))}/docs/${escapeHtml(it.slug)}" target="_blank" rel="noopener">${slugText}</a>`
@@ -544,13 +547,13 @@
       const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const split = splitRepoPrefix(it.filePath || "", it.locale);
-      const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" title="Filter by repo">${escapeHtml(it.repo)}</button>`;
+      const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" aria-label="Filter by repo: ${escapeHtml(it.repo)}">${escapeHtml(it.repo)}</button>`;
       const pathHtml = split.rest ? `<span class="path">${highlight(split.rest, tokens)}</span>${escapeHtml(lineCol)}` : "";
       const ghUrl = githubUrl(it);
       const fileCell = ghUrl
         ? `${repoPill}<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
         : `${repoPill}${pathHtml}`;
-      const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" title="Filter by category">${escapeHtml(it.sourceCategory)}</button></td>`;
+      const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(it.sourceCategory)}">${escapeHtml(it.sourceCategory)}</button></td>`;
       return `<tr>
         <td class="file">${fileCell}</td>
         ${catCell}
