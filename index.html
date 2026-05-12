@@ -232,6 +232,7 @@
       <button id="reset">Reset</button>
       <button id="copyMd" title="Copy filtered list as Markdown table">Copy MD</button>
       <button id="copyCsv" title="Copy filtered list as CSV">Copy CSV</button>
+      <button id="copyJson" title="Copy filtered list as JSON">Copy JSON</button>
     </div>
   </div>
 </header>
@@ -818,6 +819,7 @@
     });
     $("copyMd").addEventListener("click", () => copyExport($("copyMd"), buildMarkdown));
     $("copyCsv").addEventListener("click", () => copyExport($("copyCsv"), buildCsv));
+    $("copyJson").addEventListener("click", () => copyExport($("copyJson"), buildJson));
   }
 
   function activeFilterSummary() {
@@ -890,6 +892,24 @@
       ].map(csvField).join(","));
     }
     return rows.join("\r\n");
+  }
+
+  function buildJson() {
+    const items = state.filtered.map(it => ({
+      repo: it.repo || "",
+      file: it.filePath || "",
+      line: it.line ?? null,
+      col: it.col ?? null,
+      locale: it.locale || "",
+      category: it.sourceCategory || "",
+      templ: it.templ || "",
+      message: it.message || "",
+      slug: it.slug || "",
+      url: it.url || "",
+      redirect: it.redirect || "",
+      github_url: githubUrl(it) || "",
+    }));
+    return JSON.stringify(items, null, 2);
   }
 
   async function copyExport(btn, build) {
