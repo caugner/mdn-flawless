@@ -584,7 +584,7 @@
     return s;
   }
 
-  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, childClass) {
+  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, childClass, fileColspan) {
     const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
     const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
     const slugText = highlight(it.slug, tokens);
@@ -604,7 +604,7 @@
       : `${repoPill}${pathHtml}`;
     const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(it.sourceCategory)}">${escapeHtml(it.sourceCategory)}</button></td>`;
     return `<tr${childClass ? ` class="${childClass}"` : ""}>
-      <td class="file">${fileCell}</td>
+      <td class="file"${fileColspan ? ` colspan="${fileColspan}"` : ""}>${fileCell}</td>
       ${catCell}
       <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
     </tr>`;
@@ -711,7 +711,7 @@
 
   function renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory) {
     const slice = state.groups.slice(start, start + ps);
-    const sampleColLabel = "Sample";
+    const sampleColLabel = "Message";
     const rows = slice.map(g => {
       const expanded = state.expanded.has(g.key);
       const repoPill = groupRepoPill(g.key, group, g.items);
@@ -725,7 +725,7 @@
         <td class="msg">${sampleMsg}</td>
       </tr>`;
       if (!expanded) return main;
-      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, "group-child")).join("");
+      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, true, "group-child", 2)).join("");
       return main + children;
     }).join("");
 
