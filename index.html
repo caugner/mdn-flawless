@@ -128,6 +128,30 @@
     height: 8px;
     margin-top: 12px;
   }
+  button.group-toggle {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+  button.group-toggle:hover { color: var(--accent); }
+  button.group-toggle:hover .path { color: var(--accent); }
+  button.group-toggle .caret-glyph {
+    display: inline-block;
+    width: 1em;
+    margin-right: 4px;
+    color: var(--muted);
+  }
+  button.group-toggle:hover .caret-glyph { color: var(--accent); }
+  .muted { color: var(--muted); }
+  tr.group-child td { background: var(--row-alt); }
+  tr.group-child td.file { padding-left: 24px; }
+  td.count { font-variant-numeric: tabular-nums; }
   th[data-sort]::after { content: " ⇅"; opacity: 0.3; }
   th[data-sort].asc::after { content: " ↑"; opacity: 1; }
   th[data-sort].desc::after { content: " ↓"; opacity: 1; }
@@ -181,6 +205,14 @@
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
+    <label>Group by
+      <select id="groupBy">
+        <option value="">None</option>
+        <option value="url">URL</option>
+        <option value="slug">Slug</option>
+        <option value="filePath">File path</option>
+      </select>
+    </label>
     <span class="stats" id="stats" aria-live="polite">Loading…</span>
   </div>
   <div class="row">
@@ -217,10 +249,14 @@
   const state = {
     all: [],
     filtered: [],
+    groups: [],
+    expanded: new Set(),
     page: 0,
     pageSize: 200,
     sortKey: null,
     sortDir: 1,
+    groupSortKey: "count",
+    groupSortDir: -1,
   };
 
   // Categorize a message into a coarse bucket. Keep the longest matching prefix.
@@ -354,6 +390,7 @@
     ["templ", "templ"],
     ["sourcepos", "pos"],
     ["filePath", "file"],
+    ["groupBy", "group"],
   ];
 
   function readHashIntoInputs() {
@@ -396,7 +433,9 @@
       tokens: q ? q.split(/\s+/) : [],
     };
     writeInputsToHash();
-    $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.pos || f.fp || f.tokens.length));
+    const group = $("groupBy").value;
+    $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.pos || f.fp || group || f.tokens.length));
+    $("groupBy").classList.toggle("active", !!group);
     $("q").classList.toggle("active", f.tokens.length > 0);
     $("category").classList.toggle("active", !!f.cat);
     $("repo").classList.toggle("active", !!f.repo);
@@ -430,6 +469,8 @@
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
 
     if (state.sortKey) sortFiltered();
+    buildGroups();
+    state.expanded.clear();
     state.page = 0;
     render();
   }
@@ -440,6 +481,31 @@
       const av = a[k], bv = b[k];
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * d;
       return String(av).localeCompare(String(bv)) * d;
+    });
+  }
+
+  const GROUP_LABELS = { url: "URL", slug: "Slug", filePath: "File path" };
+
+  function buildGroups() {
+    const g = $("groupBy").value;
+    if (!g) { state.groups = []; return; }
+    const map = new Map();
+    for (const it of state.filtered) {
+      const key = it[g] || "(none)";
+      let bucket = map.get(key);
+      if (!bucket) { bucket = { key, count: 0, items: [] }; map.set(key, bucket); }
+      bucket.count++;
+      bucket.items.push(it);
+    }
+    state.groups = [...map.values()];
+    sortGroups();
+  }
+
+  function sortGroups() {
+    const k = state.groupSortKey, d = state.groupSortDir;
+    state.groups.sort((a, b) => {
+      if (k === "count") return (a.count - b.count) * d || a.key.localeCompare(b.key);
+      return a.key.localeCompare(b.key) * d;
     });
   }
 
@@ -509,15 +575,43 @@
     return s;
   }
 
+  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, childClass) {
+    const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
+    const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
+    const slugText = highlight(it.slug, tokens);
+    const slugLinked = it.locale && it.slug
+      ? `<a href="https://developer.mozilla.org/${escapeHtml(mdnLocale(it.locale))}/docs/${escapeHtml(it.slug)}" target="_blank" rel="noopener">${slugText}</a>`
+      : slugText;
+    const slug = it.slug ? `<div><span class="pill">slug</span>${slugLinked}</div>` : "";
+    const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
+    const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
+    const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
+    const split = splitRepoPrefix(it.filePath || "", it.locale);
+    const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" aria-label="Filter by repo: ${escapeHtml(it.repo)}">${escapeHtml(it.repo)}</button>`;
+    const pathHtml = split.rest ? `<span class="path">${highlight(split.rest, tokens)}</span>${escapeHtml(lineCol)}` : "";
+    const ghUrl = githubUrl(it);
+    const fileCell = ghUrl
+      ? `${repoPill}<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
+      : `${repoPill}${pathHtml}`;
+    const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(it.sourceCategory)}">${escapeHtml(it.sourceCategory)}</button></td>`;
+    return `<tr${childClass ? ` class="${childClass}"` : ""}>
+      <td class="file">${fileCell}</td>
+      ${catCell}
+      <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
+    </tr>`;
+  }
+
   function render() {
-    const total = state.filtered.length;
     const grandTotal = state.all.length;
+    const totalIssues = state.filtered.length;
     const ps = state.pageSize;
+    const group = $("groupBy").value;
+    const grouped = !!group;
+    const total = grouped ? state.groups.length : totalIssues;
     const pages = Math.max(1, Math.ceil(total / ps));
     if (state.page >= pages) state.page = pages - 1;
     if (state.page < 0) state.page = 0;
     const start = state.page * ps;
-    const slice = state.filtered.slice(start, start + ps);
 
     const files = new Set();
     const slugs = new Set();
@@ -528,9 +622,11 @@
     const fileSlugStat = files.size === slugs.size
       ? `${files.size.toLocaleString()} files/slugs`
       : `${files.size.toLocaleString()} files · ${slugs.size.toLocaleString()} slugs`;
-    $("stats").textContent = `${total.toLocaleString()} of ${grandTotal.toLocaleString()} issues · ${fileSlugStat}`;
+    const groupStat = grouped ? `${state.groups.length.toLocaleString()} ${GROUP_LABELS[group].toLowerCase()} groups · ` : "";
+    $("stats").textContent = `${groupStat}${totalIssues.toLocaleString()} of ${grandTotal.toLocaleString()} issues · ${fileSlugStat}`;
+    const unit = grouped ? "groups" : "issues";
     $("pageInfo").textContent = total
-      ? `${(start + 1).toLocaleString()}–${Math.min(start + ps, total).toLocaleString()} · page ${state.page + 1} / ${pages}`
+      ? `${(start + 1).toLocaleString()}–${Math.min(start + ps, total).toLocaleString()} ${unit} · page ${state.page + 1} / ${pages}`
       : "—";
     $("prev").disabled = state.page <= 0;
     $("next").disabled = state.page >= pages - 1;
@@ -546,31 +642,14 @@
     const hideLocale = !!$("locale").value;
     const hideTempl = !!$("templ").value;
     const hideCategory = !!$("category").value;
-    const rows = slice.map(it => {
-      const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
-      const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
-      const slugText = highlight(it.slug, tokens);
-      const slugLinked = it.locale && it.slug
-        ? `<a href="https://developer.mozilla.org/${escapeHtml(mdnLocale(it.locale))}/docs/${escapeHtml(it.slug)}" target="_blank" rel="noopener">${slugText}</a>`
-        : slugText;
-      const slug = it.slug ? `<div><span class="pill">slug</span>${slugLinked}</div>` : "";
-      const url = it.url ? `<div><span class="pill">url</span>${highlight(it.url, tokens)}</div>` : "";
-      const redirect = it.redirect ? `<div><span class="pill">→</span>${highlight(it.redirect, tokens)}</div>` : "";
-      const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
-      const split = splitRepoPrefix(it.filePath || "", it.locale);
-      const repoPill = `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" aria-label="Filter by repo: ${escapeHtml(it.repo)}">${escapeHtml(it.repo)}</button>`;
-      const pathHtml = split.rest ? `<span class="path">${highlight(split.rest, tokens)}</span>${escapeHtml(lineCol)}` : "";
-      const ghUrl = githubUrl(it);
-      const fileCell = ghUrl
-        ? `${repoPill}<a href="${escapeHtml(ghUrl)}" target="_blank" rel="noopener">${pathHtml}</a>`
-        : `${repoPill}${pathHtml}`;
-      const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(it.sourceCategory)}">${escapeHtml(it.sourceCategory)}</button></td>`;
-      return `<tr>
-        <td class="file">${fileCell}</td>
-        ${catCell}
-        <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
-      </tr>`;
-    }).join("");
+
+    if (grouped) {
+      renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory);
+      return;
+    }
+
+    const slice = state.filtered.slice(start, start + ps);
+    const rows = slice.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory)).join("");
 
     const cols = hideCategory
       ? `<col style="width:42%"><col style="width:58%">`
@@ -604,6 +683,89 @@
     }
   }
 
+  function groupKeyInner(key, group, items, tokens) {
+    if (key === "(none)") return `<span class="muted">(none)</span>`;
+    if (group === "filePath") {
+      const it = items[0];
+      const split = splitRepoPrefix(key, it && it.locale);
+      return `<span class="path">${highlight(split.rest, tokens)}</span>`;
+    }
+    return highlight(key, tokens);
+  }
+
+  function groupRepoPill(key, group, items) {
+    if (group !== "filePath" || key === "(none)") return "";
+    const it = items[0];
+    if (!it) return "";
+    return `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" aria-label="Filter by repo: ${escapeHtml(it.repo)}">${escapeHtml(it.repo)}</button>`;
+  }
+
+  function renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory) {
+    const slice = state.groups.slice(start, start + ps);
+    const sampleColLabel = "Sample";
+    const rows = slice.map(g => {
+      const expanded = state.expanded.has(g.key);
+      const repoPill = groupRepoPill(g.key, group, g.items);
+      const toggle = `<button type="button" class="group-toggle" data-toggle-group="${escapeHtml(g.key)}" aria-expanded="${expanded}"><span class="caret-glyph" aria-hidden="true">${expanded ? "▼" : "▶"}</span>${groupKeyInner(g.key, group, g.items, tokens)}</button>`;
+      const sample = g.items[0];
+      const sampleCat = (hideCategory || !sample) ? "" : `<button type="button" class="pill" data-filter="category" data-value="${escapeHtml(sample.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(sample.sourceCategory)}">${escapeHtml(sample.sourceCategory)}</button> `;
+      const sampleMsg = sample ? `${sampleCat}${highlight(sample.message || sample.source || "", tokens)}` : "";
+      const main = `<tr>
+        <td class="file">${repoPill}${toggle}</td>
+        <td class="count">${g.count.toLocaleString()}</td>
+        <td class="msg">${sampleMsg}</td>
+      </tr>`;
+      if (!expanded) return main;
+      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, "group-child")).join("");
+      return main + children;
+    }).join("");
+
+    const cols = `<col style="width:50%"><col style="width:10%"><col style="width:40%">`;
+    const keyLabel = GROUP_LABELS[group];
+    content.innerHTML = `<table>
+      <colgroup>${cols}</colgroup>
+      <thead><tr>
+        <th data-gsort="key" class="${groupSortClass('key')}" tabindex="0" role="button" aria-sort="${groupAriaSort('key')}">${escapeHtml(keyLabel)}</th>
+        <th data-gsort="count" class="${groupSortClass('count')}" tabindex="0" role="button" aria-sort="${groupAriaSort('count')}">Count</th>
+        <th>${escapeHtml(sampleColLabel)}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    for (const th of content.querySelectorAll("th[data-gsort]")) {
+      const activate = () => {
+        const k = th.dataset.gsort;
+        if (state.groupSortKey === k) state.groupSortDir = -state.groupSortDir;
+        else { state.groupSortKey = k; state.groupSortDir = k === "count" ? -1 : 1; }
+        sortGroups();
+        render();
+      };
+      th.addEventListener("click", activate);
+      th.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
+      });
+    }
+
+    for (const btn of content.querySelectorAll("button.group-toggle[data-toggle-group]")) {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.toggleGroup;
+        if (state.expanded.has(key)) state.expanded.delete(key);
+        else state.expanded.add(key);
+        render();
+      });
+    }
+  }
+
+  function groupSortClass(k) {
+    if (state.groupSortKey !== k) return "";
+    return state.groupSortDir > 0 ? "asc" : "desc";
+  }
+
+  function groupAriaSort(k) {
+    if (state.groupSortKey !== k) return "none";
+    return state.groupSortDir > 0 ? "ascending" : "descending";
+  }
+
   function sortClass(k) {
     if (state.sortKey !== k) return "";
     return state.sortDir > 0 ? "asc" : "desc";
@@ -625,7 +787,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "repo", "locale", "templ", "sourcepos"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "repo", "locale", "templ", "sourcepos", "groupBy"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -649,7 +811,9 @@
       $("locale").value = "";
       $("templ").value = "";
       $("sourcepos").value = "";
+      $("groupBy").value = "";
       state.sortKey = null;
+      state.expanded.clear();
       applyFilters();
     });
     $("copyMd").addEventListener("click", () => copyExport($("copyMd"), buildMarkdown));
@@ -672,10 +836,18 @@
   function buildMarkdown() {
     const total = state.filtered.length;
     const filters = activeFilterSummary();
+    const group = $("groupBy").value;
     const lines = [];
     lines.push(`[${total.toLocaleString()} issues — live view](${location.href})`);
     if (filters) lines.push(`\n**Filters:** ${filters}`);
     lines.push("");
+    if (group) {
+      const label = GROUP_LABELS[group];
+      lines.push(`| ${label} | Count |`);
+      lines.push("|---|---:|");
+      for (const g of state.groups) lines.push(`| ${mdCell(g.key)} | ${g.count} |`);
+      return lines.join("\n");
+    }
     lines.push("| Category | File | Slug | Message |");
     lines.push("|---|---|---|---|");
     for (const it of state.filtered) {
@@ -702,6 +874,12 @@
   }
 
   function buildCsv() {
+    const group = $("groupBy").value;
+    if (group) {
+      const rows = [[GROUP_LABELS[group].toLowerCase().replace(/\s+/g, "_"), "count"].join(",")];
+      for (const g of state.groups) rows.push([csvField(g.key), g.count].join(","));
+      return rows.join("\r\n");
+    }
     const cols = ["repo", "file", "line", "col", "locale", "category", "templ", "message", "slug", "url", "redirect", "github_url"];
     const rows = [cols.join(",")];
     for (const it of state.filtered) {
@@ -719,7 +897,8 @@
     try {
       const text = build();
       await navigator.clipboard.writeText(text);
-      btn.textContent = `Copied ${state.filtered.length.toLocaleString()}`;
+      const n = $("groupBy").value ? state.groups.length : state.filtered.length;
+      btn.textContent = `Copied ${n.toLocaleString()}`;
     } catch (e) {
       btn.textContent = "Copy failed";
       console.error(e);
