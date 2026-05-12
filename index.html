@@ -152,9 +152,9 @@
   tr.group-child td { background: var(--row-alt); }
   tr.group-child td.file { padding-left: 24px; }
   td.count { font-variant-numeric: tabular-nums; }
-  th[data-sort]::after { content: " ⇅"; opacity: 0.3; }
-  th[data-sort].asc::after { content: " ↑"; opacity: 1; }
-  th[data-sort].desc::after { content: " ↓"; opacity: 1; }
+  th[data-sort]::after, th[data-gsort]::after { content: " ⇅"; opacity: 0.3; }
+  th[data-sort].asc::after, th[data-gsort].asc::after { content: " ↑"; opacity: 1; }
+  th[data-sort].desc::after, th[data-gsort].desc::after { content: " ↓"; opacity: 1; }
   .pager { display: flex; gap: 6px; align-items: center; }
   mark { background: #ffd54f; color: #000; }
   .github-fork {
