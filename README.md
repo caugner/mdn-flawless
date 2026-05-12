@@ -26,7 +26,7 @@ Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page strea
 
 ### Grouping
 
-- Group by **URL**, **Slug**, or **File path**.
+- Group by **Category**, **URL**, **Slug**, or **File path**.
 - Group rows are sortable by key or count, and expand inline to reveal their issues.
 
 ### Table

@@ -208,6 +208,7 @@
     <label>Group by
       <select id="groupBy">
         <option value="">None</option>
+        <option value="sourceCategory">Category</option>
         <option value="url">URL</option>
         <option value="slug">Slug</option>
         <option value="filePath">File path</option>
@@ -485,7 +486,7 @@
     });
   }
 
-  const GROUP_LABELS = { url: "URL", slug: "Slug", filePath: "File path" };
+  const GROUP_LABELS = { sourceCategory: "Category", url: "URL", slug: "Slug", filePath: "File path" };
 
   function buildGroups() {
     const g = $("groupBy").value;
