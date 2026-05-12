@@ -44,7 +44,7 @@
   }
   .row + .row { margin-top: 8px; }
   .btn-group { display: inline-flex; gap: 6px; }
-  label {
+  label, .field {
     display: inline-flex;
     flex-direction: column;
     font-size: 11px;
@@ -187,13 +187,13 @@
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
-    <label>Copy issues as
+    <div class="field">Copy issues as
       <div class="btn-group">
         <button id="copyMd" title="Copy filtered list as Markdown table">Markdown</button>
         <button id="copyCsv" title="Copy filtered list as CSV">CSV</button>
         <button id="copyJson" title="Copy filtered list as JSON">JSON</button>
       </div>
-    </label>
+    </div>
     <span class="stats" id="stats" aria-live="polite">Loading…</span>
   </div>
   <div class="row">
