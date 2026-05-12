@@ -1,6 +1,6 @@
 # MDN Flawless
 
-A single-file static viewer for [`issues.json`](issues.json) build output from [Rari](https://github.com/mdn/rari). No build step — open `index.html` from a local HTTP server and browse, filter, group, and export the issue set.
+A single-file static viewer for `issues.json` build output from [Rari](https://github.com/mdn/rari) (when run with `--issues`). No build step — open `index.html` from a local HTTP server and browse, filter, group, and export the issue set.
 
 The deployment at <https://caugner.github.io/mdn-flawless/> shows the `issues.json` from the last production build of <https://developer.mozilla.org/>.
 
@@ -12,7 +12,7 @@ python3 -m http.server
 npx http-server .
 ```
 
-Then open <http://localhost:8000/>. The page streams `issues.json` with a live progress bar and flattens it into a searchable table.
+Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page streams `issues.json` with a live progress bar and flattens it into a searchable table.
 
 ## Features
 
