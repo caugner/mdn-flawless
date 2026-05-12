@@ -198,6 +198,8 @@
         </select>
       </label>
       <button id="reset">Reset</button>
+      <button id="copyMd" title="Copy filtered list as Markdown table">Copy MD</button>
+      <button id="copyCsv" title="Copy filtered list as CSV">Copy CSV</button>
     </div>
   </div>
 </header>
@@ -650,6 +652,79 @@
       state.sortKey = null;
       applyFilters();
     });
+    $("copyMd").addEventListener("click", () => copyExport($("copyMd"), buildMarkdown));
+    $("copyCsv").addEventListener("click", () => copyExport($("copyCsv"), buildCsv));
+  }
+
+  function activeFilterSummary() {
+    const parts = [];
+    for (const [id, key] of HASH_FIELDS) {
+      const v = $(id).value.trim();
+      if (v) parts.push(`${key}=${v}`);
+    }
+    return parts.join(" · ");
+  }
+
+  function mdCell(s) {
+    return String(s ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  }
+
+  function buildMarkdown() {
+    const total = state.filtered.length;
+    const filters = activeFilterSummary();
+    const lines = [];
+    lines.push(`[${total.toLocaleString()} issues — live view](${location.href})`);
+    if (filters) lines.push(`\n**Filters:** ${filters}`);
+    lines.push("");
+    lines.push("| Category | File | Slug | Message |");
+    lines.push("|---|---|---|---|");
+    for (const it of state.filtered) {
+      const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
+      const fileLabel = `${it.filePath || ""}${lineCol}`;
+      const gh = githubUrl(it);
+      const fileCell = gh ? `[${mdCell(fileLabel)}](${gh})` : mdCell(fileLabel);
+      const slugCell = it.slug && it.locale
+        ? `[${mdCell(it.slug)}](https://developer.mozilla.org/${mdnLocale(it.locale)}/docs/${it.slug})`
+        : mdCell(it.slug || "");
+      let msg = it.message || "";
+      if (!msg) {
+        if (it.url && it.redirect) msg = `${it.url} → ${it.redirect}`;
+        else msg = it.url || it.redirect || "";
+      }
+      lines.push(`| ${mdCell(it.sourceCategory || "")} | ${fileCell} | ${slugCell} | ${mdCell(msg)} |`);
+    }
+    return lines.join("\n");
+  }
+
+  function csvField(s) {
+    const v = s == null ? "" : String(s);
+    return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  }
+
+  function buildCsv() {
+    const cols = ["repo", "file", "line", "col", "locale", "category", "templ", "message", "slug", "url", "redirect", "github_url"];
+    const rows = [cols.join(",")];
+    for (const it of state.filtered) {
+      rows.push([
+        it.repo, it.filePath, it.line ?? "", it.col ?? "",
+        it.locale, it.sourceCategory, it.templ, it.message,
+        it.slug, it.url, it.redirect, githubUrl(it) || "",
+      ].map(csvField).join(","));
+    }
+    return rows.join("\r\n");
+  }
+
+  async function copyExport(btn, build) {
+    const original = btn.textContent;
+    try {
+      const text = build();
+      await navigator.clipboard.writeText(text);
+      btn.textContent = `Copied ${state.filtered.length.toLocaleString()}`;
+    } catch (e) {
+      btn.textContent = "Copy failed";
+      console.error(e);
+    }
+    setTimeout(() => { btn.textContent = original; }, 1500);
   }
 
   function fmtBytes(n) {
