@@ -43,6 +43,7 @@
     align-items: center;
   }
   .row + .row { margin-top: 8px; }
+  .btn-group { display: inline-flex; gap: 6px; }
   label {
     display: inline-flex;
     flex-direction: column;
@@ -183,6 +184,19 @@
     <label>Search
       <input type="text" id="q" autocomplete="off" class="wide" placeholder="message, file, url, redirect, source, slug…" autofocus>
     </label>
+    <label>File path contains
+      <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
+    </label>
+    <label>Copy issues as
+      <div class="btn-group">
+        <button id="copyMd" title="Copy filtered list as Markdown table">Markdown</button>
+        <button id="copyCsv" title="Copy filtered list as CSV">CSV</button>
+        <button id="copyJson" title="Copy filtered list as JSON">JSON</button>
+      </div>
+    </label>
+    <span class="stats" id="stats" aria-live="polite">Loading…</span>
+  </div>
+  <div class="row">
     <label>Category
       <select id="category"><option value="">All</option></select>
     </label>
@@ -202,9 +216,6 @@
         <option value="no">Without</option>
       </select>
     </label>
-    <label>File path contains
-      <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
-    </label>
     <label>Group by
       <select id="groupBy">
         <option value="">None</option>
@@ -214,7 +225,6 @@
         <option value="filePath">File path</option>
       </select>
     </label>
-    <span class="stats" id="stats" aria-live="polite">Loading…</span>
   </div>
   <div class="row">
     <div class="pager">
@@ -223,7 +233,7 @@
       <button id="next" aria-label="Next page">Next ▶</button>
       <label style="flex-direction: row; align-items: center; gap: 4px;">
         Page size
-        <select id="pageSize">
+        <select id="pageSize" style="min-width: 0">
           <option>50</option>
           <option selected>200</option>
           <option>500</option>
@@ -231,9 +241,6 @@
         </select>
       </label>
       <button id="reset">Reset</button>
-      <button id="copyMd" title="Copy filtered list as Markdown table">Copy MD</button>
-      <button id="copyCsv" title="Copy filtered list as CSV">Copy CSV</button>
-      <button id="copyJson" title="Copy filtered list as JSON">Copy JSON</button>
     </div>
   </div>
 </header>
