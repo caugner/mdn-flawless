@@ -48,6 +48,7 @@ Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page strea
 ### UX
 
 - Sticky header, dark mode via `prefers-color-scheme`.
+- Gradient MDN-M favicon ([favicon.svg](favicon.svg)).
 - URL hash mirrors all filters — links are shareable, and back/forward updates the view.
 - `aria-live` stats line shows filtered/total issue count plus file and slug counts.
 
