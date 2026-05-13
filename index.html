@@ -561,7 +561,7 @@
     refreshSelect($("category"), catCounts, v => CATEGORY_TO_KIND.get(v) || CAT_KIND_TYPE, CAT_KIND_ORDER, catKindHeader);
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
-    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader, [["none", `None (${noTempl.toLocaleString()})`]]);
+    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader, noTempl ? [["none", `None (${noTempl.toLocaleString()})`]] : null);
     const posSel = $("sourcepos");
     posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
