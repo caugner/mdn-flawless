@@ -1,0 +1,129 @@
+name: Build issues.json and deploy
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: site
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/content
+          path: mdn/content
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/generic-content
+          path: mdn/generic-content
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/curriculum
+          path: mdn/curriculum
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/translated-content
+          path: mdn/translated-content
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/translated-content-de
+          path: mdn/translated-content-de
+          persist-credentials: false
+
+      - name: Move de into translated-content
+        run: |
+          mv mdn/translated-content-de/files/de mdn/translated-content/files/
+          rm -rf mdn/translated-content-de
+          cd mdn/translated-content
+          git add files/de
+          git -c user.name='MDN' -c user.email='mdn-dev@mozilla.com' commit -m 'de'
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/mdn-contributor-spotlight
+          path: mdn/mdn-contributor-spotlight
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: mdn/fred
+          path: mdn/fred
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: mdn/fred/.nvmrc
+          package-manager-cache: false
+
+      - name: Install (fred)
+        working-directory: mdn/fred
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Build issues.json (rari)
+        working-directory: mdn/fred
+        env:
+          CONTENT_ROOT: ${{ github.workspace }}/mdn/content/files
+          CONTENT_TRANSLATED_ROOT: ${{ github.workspace }}/mdn/translated-content/files
+          CONTRIBUTOR_SPOTLIGHT_ROOT: ${{ github.workspace }}/mdn/mdn-contributor-spotlight/contributors
+          CURRICULUM_ROOT: ${{ github.workspace }}/mdn/curriculum
+          GENERIC_CONTENT_ROOT: ${{ github.workspace }}/mdn/generic-content/files
+          BASE_URL: "https://developer.mozilla.org"
+          BUILD_OUT_ROOT: "out"
+          LIVE_SAMPLES_BASE_URL: https://live.mdnplay.dev
+          ADDITIONAL_LOCALES_FOR_GENERICS_AND_SPAS: de
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+          npm run rari content sync-translated-content
+          npm run rari git-history
+          npm run rari build -- --all --issues "$BUILD_OUT_ROOT/issues.json"
+          cp "$BUILD_OUT_ROOT/issues.json" "$GITHUB_WORKSPACE/site/issues.json"
+
+      - name: Publish issues.json release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: site
+        run: |
+          gh release delete issues-latest --yes --cleanup-tag || true
+          gh release create issues-latest issues.json \
+            --title "Latest issues.json" \
+            --notes "Built $(date -u +%FT%TZ) from main MDN repos."
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
