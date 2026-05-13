@@ -318,6 +318,21 @@
     return "unknown";
   }
 
+  // Category kinds for grouping the Category filter.
+  const CAT_KIND_MSG = "Messages";
+  const CAT_KIND_TYPE = "Sources";
+  const CAT_KIND_ORDER = [CAT_KIND_TYPE, CAT_KIND_MSG];
+  const catKindValue = kind => kind === CAT_KIND_MSG ? "__messages__" : "__sources__";
+  const CAT_VALUE_TO_KIND = new Map(CAT_KIND_ORDER.map(k => [catKindValue(k), k]));
+  const isCatKindValue = v => CAT_VALUE_TO_KIND.has(v);
+  const catKindHeader = {
+    value: catKindValue,
+    label: (kind, total) => `${kind} (${total.toLocaleString()})`,
+    isValue: isCatKindValue,
+  };
+  // Map from sourceCategory string → kind, populated during flatten().
+  const CATEGORY_TO_KIND = new Map();
+
   function flatten(data) {
     const out = [];
     for (const [rawFilePath, issues] of Object.entries(data)) {
@@ -329,6 +344,9 @@
         const source = fields.source || "";
         // When a source has no message (e.g. broken-link), the source IS the category.
         const category = message ? categorize(message) : (source || "(none)");
+        const sourceCategory = source && message ? `${source}: ${category}` : category;
+        const categoryKind = message ? CAT_KIND_MSG : CAT_KIND_TYPE;
+        if (!CATEGORY_TO_KIND.has(sourceCategory)) CATEGORY_TO_KIND.set(sourceCategory, categoryKind);
         const locale = spans.locale || "";
         out.push({
           filePath,
@@ -348,7 +366,8 @@
           sidebar: spans.sidebar || "",
           category,
           // If the source already serves as the category, don't repeat it.
-          sourceCategory: source && message ? `${source}: ${category}` : category,
+          sourceCategory,
+          categoryKind,
           repo: detectRepo(filePath, locale),
         });
       }
@@ -432,7 +451,11 @@
 
   // Returns true if `it` passes every active filter EXCEPT the one named in `except`.
   function passes(it, f, except) {
-    if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
+    if (except !== "category" && f.cat) {
+      if (isCatKindValue(f.cat)) {
+        if (it.categoryKind !== CAT_VALUE_TO_KIND.get(f.cat)) return false;
+      } else if (it.sourceCategory !== f.cat) return false;
+    }
     if (except !== "repo" && f.repo && it.repo !== f.repo) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
     if (except !== "templ" && f.tmpl) {
@@ -535,7 +558,7 @@
       if (passes(it, f, "sourcepos")) { if (it.line) posWith++; else posWithout++; }
     }
 
-    refreshSelect($("category"), catCounts);
+    refreshSelect($("category"), catCounts, v => CATEGORY_TO_KIND.get(v) || CAT_KIND_TYPE, CAT_KIND_ORDER, catKindHeader);
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
     refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader, [["none", `None (${noTempl.toLocaleString()})`]]);
@@ -717,7 +740,8 @@
     const hideLocale = !!$("locale").value;
     const templVal = $("templ").value;
     const hideTempl = !!templVal && !isMacroTypeValue(templVal);
-    const hideCategory = !!$("category").value;
+    const catVal = $("category").value;
+    const hideCategory = !!catVal && !isCatKindValue(catVal);
 
     if (grouped) {
       renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory);

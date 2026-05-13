@@ -20,6 +20,7 @@ Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page strea
 
 - Full-text search across message, file, URL, redirect, source, slug, basepath, macro, and sidebar (space-separated tokens, AND semantics).
 - Faceted dropdowns with live counts: **Category**, **Repository**, **Locale**, **Macro (templ)**, **Source position** (with/without line info).
+- The **Category** filter groups options into **Sources** (entries where the linter `source` itself is the category, e.g. `broken-link`) and **Messages** (parsed from the error text, e.g. `Parse error`). Selecting a group header filters by the whole kind (URL hash: `category=__sources__` / `__messages__`).
 - The **Macro** filter groups macros by type (Link, Sidebar, List, Component, Banner, Badge, Embed, Other / Unclassified). Each type heading is a bold divider with the total issue count, and selecting its "(all …)" option filters by the whole type (reflected in the URL hash as e.g. `templ=__link__`).
 - "File path contains" substring filter.
 - Click any pill (repo, locale, macro, category) in a row to filter by that value.
