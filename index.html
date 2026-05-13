@@ -358,17 +358,21 @@
 
   // Rebuild a select's options from a counts map, preserving the current selection
   // even if the value is no longer present (shown with count 0).
-  // If `groupOf` is provided, options are nested in optgroups (non-selectable dividers)
-  // with totals; group order follows `groupOrder`, then any others alphabetically.
-  function refreshSelect(sel, counts, groupOf, groupOrder) {
+  // If `groupOf` is provided, options are flat-grouped: a selectable group header
+  // option followed by indented member options. Group order follows `groupOrder`,
+  // then any others alphabetically. `groupHeader` supplies the header's synthetic
+  // value (e.g. `__link__`) and label.
+  function refreshSelect(sel, counts, groupOf, groupOrder, groupHeader) {
     const current = sel.value;
     while (sel.children.length > 1) sel.removeChild(sel.lastChild);
     const keys = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-    if (current && !counts.has(current)) keys.push(current);
-    const makeOpt = v => {
+    if (current && !counts.has(current) && !(groupHeader && groupHeader.isValue(current))) {
+      keys.push(current);
+    }
+    const makeOpt = (v, text) => {
       const opt = document.createElement("option");
       opt.value = v;
-      opt.textContent = `${v} (${(counts.get(v) || 0).toLocaleString()})`;
+      opt.textContent = text != null ? text : `${v} (${(counts.get(v) || 0).toLocaleString()})`;
       return opt;
     };
     if (!groupOf) {
@@ -385,10 +389,10 @@
       for (const g of ordered) {
         const members = byGroup.get(g);
         const total = members.reduce((s, v) => s + (counts.get(v) || 0), 0);
-        const og = document.createElement("optgroup");
-        og.label = `${g} (${total.toLocaleString()})`;
-        for (const v of members) og.appendChild(makeOpt(v));
-        sel.appendChild(og);
+        sel.appendChild(makeOpt(groupHeader.value(g), groupHeader.label(g, total, members.length)));
+        for (const v of members) {
+          sel.appendChild(makeOpt(v, `  ${v} (${(counts.get(v) || 0).toLocaleString()})`));
+        }
       }
     }
     sel.value = current;
@@ -396,13 +400,13 @@
 
   // Macro (templ) types. Names are case-insensitive on lookup.
   const MACRO_TYPES = {
-    "Link": ["csp", "cssxref", "domxref", "glossary", "htmlelement", "httpheader", "httpmethod", "httpstatus", "jsxref", "mathmlelement", "rfc", "svgattr", "svgelement", "webextapiref", "xsltref"],
-    "Sidebar": ["accessibilitysidebar", "addonsidebar", "addonsidebarmain", "apiref", "cssref", "defaultapisidebar", "firefoxsidebar", "gamessidebar", "glossarysidebar", "htmlsidebar", "httpsidebar", "jsref", "jssidebar", "learnsidebar", "mathmlref", "mdnsidebar", "pwasidebar", "svgref", "webassemblysidebar", "xsltsidebar"],
-    "List": ["apilistalpha", "landingpagelistsubpages", "listgroups", "listsubpages", "listsubpagesforsidebar", "next", "nextmenu", "previous", "previousmenu", "previousmenunext", "previousnext", "quicklinkswithsubpages", "subpageswithsummaries"],
-    "Component": ["compat", "css_ref", "cssinfo", "csssyntax", "csssyntaxraw", "firefox_for_developers", "glossarydisambiguation", "inheritancediagram", "js_property_attributes", "specifications", "svginfo", "webextallcompattables", "webextallexamples", "webextexamples"],
-    "Banner": ["availableinworkers", "deprecated_header", "non_standard_header", "seecompattable", "securecontext_header"],
-    "Badge": ["deprecated_inline", "experimental_inline", "experimentalbadge", "non_standard_inline", "non_standardbage", "optional_inline", "readonlyinline", "securecontext_inline"],
-    "Embed": ["embedghlivesample", "embedlivesample", "embedyoutube", "interactiveexample", "jsfiddleembed", "livesamplelink"],
+    "Links": ["csp", "cssxref", "domxref", "glossary", "htmlelement", "httpheader", "httpmethod", "httpstatus", "jsxref", "mathmlelement", "rfc", "svgattr", "svgelement", "webextapiref", "xsltref"],
+    "Sidebars": ["accessibilitysidebar", "addonsidebar", "addonsidebarmain", "apiref", "cssref", "defaultapisidebar", "firefoxsidebar", "gamessidebar", "glossarysidebar", "htmlsidebar", "httpsidebar", "jsref", "jssidebar", "learnsidebar", "mathmlref", "mdnsidebar", "pwasidebar", "svgref", "webassemblysidebar", "xsltsidebar"],
+    "Lists": ["apilistalpha", "landingpagelistsubpages", "listgroups", "listsubpages", "listsubpagesforsidebar", "next", "nextmenu", "previous", "previousmenu", "previousmenunext", "previousnext", "quicklinkswithsubpages", "subpageswithsummaries"],
+    "Components": ["compat", "css_ref", "cssinfo", "csssyntax", "csssyntaxraw", "firefox_for_developers", "glossarydisambiguation", "inheritancediagram", "js_property_attributes", "specifications", "svginfo", "webextallcompattables", "webextallexamples", "webextexamples"],
+    "Banners": ["availableinworkers", "deprecated_header", "non_standard_header", "seecompattable", "securecontext_header"],
+    "Badges": ["deprecated_inline", "experimental_inline", "experimentalbadge", "non_standard_inline", "non_standardbage", "optional_inline", "readonlyinline", "securecontext_inline"],
+    "Embeds": ["embedghlivesample", "embedlivesample", "embedyoutube", "interactiveexample", "jsfiddleembed", "livesamplelink"],
   };
   const MACRO_OTHER = "Other / Unclassified";
   const MACRO_TO_TYPE = new Map();
@@ -411,6 +415,16 @@
   }
   const MACRO_TYPE_ORDER = [...Object.keys(MACRO_TYPES), MACRO_OTHER];
   const macroTypeOf = v => MACRO_TO_TYPE.get(String(v).toLowerCase()) || MACRO_OTHER;
+  // Synthetic select values for macro types, e.g. `__link__`, `__other__`.
+  // Selecting one filters issues by `macroTypeOf(it.templ) === type`.
+  const macroTypeValue = type => `__${type === MACRO_OTHER ? "other" : type.toLowerCase()}__`;
+  const MACRO_VALUE_TO_TYPE = new Map(MACRO_TYPE_ORDER.map(t => [macroTypeValue(t), t]));
+  const isMacroTypeValue = v => MACRO_VALUE_TO_TYPE.has(v);
+  const macroTypeHeader = {
+    value: macroTypeValue,
+    label: (type, total) => `${type} (${total.toLocaleString()})`,
+    isValue: isMacroTypeValue,
+  };
 
   const SEARCH_FIELDS = ["message", "filePath", "file", "url", "redirect", "source", "slug", "basepath", "templ", "sidebar"];
 
@@ -419,7 +433,11 @@
     if (except !== "category" && f.cat && it.sourceCategory !== f.cat) return false;
     if (except !== "repo" && f.repo && it.repo !== f.repo) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
-    if (except !== "templ" && f.tmpl && it.templ !== f.tmpl) return false;
+    if (except !== "templ" && f.tmpl) {
+      if (isMacroTypeValue(f.tmpl)) {
+        if (!it.templ || macroTypeOf(it.templ) !== MACRO_VALUE_TO_TYPE.get(f.tmpl)) return false;
+      } else if (it.templ !== f.tmpl) return false;
+    }
     if (except !== "sourcepos" && f.pos === "yes" && !it.line) return false;
     if (except !== "sourcepos" && f.pos === "no" && it.line) return false;
     if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
@@ -512,7 +530,7 @@
     refreshSelect($("category"), catCounts);
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
-    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER);
+    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader);
     const posSel = $("sourcepos");
     posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
