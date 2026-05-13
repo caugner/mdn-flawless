@@ -707,7 +707,8 @@
     }
 
     const hideLocale = !!$("locale").value;
-    const hideTempl = !!$("templ").value;
+    const templVal = $("templ").value;
+    const hideTempl = !!templVal && !isMacroTypeValue(templVal);
     const hideCategory = !!$("category").value;
 
     if (grouped) {
