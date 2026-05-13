@@ -922,13 +922,13 @@
     $("copyJson").addEventListener("click", () => copyExport($("copyJson"), buildJson));
   }
 
-  function activeFilterSummary() {
+  function activeFilters() {
     const parts = [];
     for (const [id, key] of HASH_FIELDS) {
       const v = $(id).value.trim();
-      if (v) parts.push(`${key}=${v}`);
+      if (v) parts.push({ key, value: v });
     }
-    return parts.join(" · ");
+    return parts;
   }
 
   function mdCell(s) {
@@ -937,11 +937,17 @@
 
   function buildMarkdown() {
     const total = state.filtered.length;
-    const filters = activeFilterSummary();
+    const filters = activeFilters();
     const group = $("groupBy").value;
+    const catVal = $("category").value;
+    const hideCategory = !!catVal && !isCatKindValue(catVal);
     const lines = [];
     lines.push(`[${total.toLocaleString()} issues — live view](${location.href})`);
-    if (filters) lines.push(`\n**Filters:** ${filters}`);
+    if (filters.length) {
+      lines.push("");
+      lines.push("**Filters:**");
+      for (const f of filters) lines.push(`- ${f.key}: ${f.value}`);
+    }
     lines.push("");
     if (group) {
       const label = GROUP_LABELS[group];
@@ -950,8 +956,10 @@
       for (const g of state.groups) lines.push(`| ${mdCell(g.key)} | ${g.count} |`);
       return lines.join("\n");
     }
-    lines.push("| Category | File | Slug | Message |");
-    lines.push("|---|---|---|---|");
+    const header = hideCategory ? "| File | Slug | Message |" : "| Category | File | Slug | Message |";
+    const sep = hideCategory ? "|---|---|---|" : "|---|---|---|---|";
+    lines.push(header);
+    lines.push(sep);
     for (const it of state.filtered) {
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const fileLabel = `${it.filePath || ""}${lineCol}`;
@@ -965,7 +973,10 @@
         if (it.url && it.redirect) msg = `${it.url} → ${it.redirect}`;
         else msg = it.url || it.redirect || "";
       }
-      lines.push(`| ${mdCell(it.sourceCategory || "")} | ${fileCell} | ${slugCell} | ${mdCell(msg)} |`);
+      const row = hideCategory
+        ? `| ${fileCell} | ${slugCell} | ${mdCell(msg)} |`
+        : `| ${mdCell(it.sourceCategory || "")} | ${fileCell} | ${slugCell} | ${mdCell(msg)} |`;
+      lines.push(row);
     }
     return lines.join("\n");
   }

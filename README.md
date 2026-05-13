@@ -41,7 +41,7 @@ Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page strea
 
 ### Export
 
-- **Copy MD** — Markdown table of the filtered list (or grouped summary), with an active-filter summary and a link back to the live view.
+- **Copy MD** — Markdown table of the filtered list (or grouped summary), with an active-filter list and a link back to the live view. The Category column is omitted when a specific category filter is active.
 - **Copy CSV** — same data as CSV (grouped or flat).
 - **Copy JSON** — same data as a pretty-printed JSON array, one object per issue.
 
