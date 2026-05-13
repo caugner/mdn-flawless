@@ -358,19 +358,59 @@
 
   // Rebuild a select's options from a counts map, preserving the current selection
   // even if the value is no longer present (shown with count 0).
-  function refreshSelect(sel, counts) {
+  // If `groupOf` is provided, options are nested in optgroups (non-selectable dividers)
+  // with totals; group order follows `groupOrder`, then any others alphabetically.
+  function refreshSelect(sel, counts, groupOf, groupOrder) {
     const current = sel.value;
-    while (sel.options.length > 1) sel.remove(1);
+    while (sel.children.length > 1) sel.removeChild(sel.lastChild);
     const keys = [...counts.keys()].sort((a, b) => a.localeCompare(b));
     if (current && !counts.has(current)) keys.push(current);
-    for (const v of keys) {
+    const makeOpt = v => {
       const opt = document.createElement("option");
       opt.value = v;
       opt.textContent = `${v} (${(counts.get(v) || 0).toLocaleString()})`;
-      sel.appendChild(opt);
+      return opt;
+    };
+    if (!groupOf) {
+      for (const v of keys) sel.appendChild(makeOpt(v));
+    } else {
+      const byGroup = new Map();
+      for (const v of keys) {
+        const g = groupOf(v);
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g).push(v);
+      }
+      const extras = [...byGroup.keys()].filter(g => !groupOrder.includes(g)).sort();
+      const ordered = groupOrder.filter(g => byGroup.has(g)).concat(extras);
+      for (const g of ordered) {
+        const members = byGroup.get(g);
+        const total = members.reduce((s, v) => s + (counts.get(v) || 0), 0);
+        const og = document.createElement("optgroup");
+        og.label = `${g} (${total.toLocaleString()})`;
+        for (const v of members) og.appendChild(makeOpt(v));
+        sel.appendChild(og);
+      }
     }
     sel.value = current;
   }
+
+  // Macro (templ) types. Names are case-insensitive on lookup.
+  const MACRO_TYPES = {
+    "Link": ["csp", "cssxref", "domxref", "glossary", "htmlelement", "httpheader", "httpmethod", "httpstatus", "jsxref", "mathmlelement", "rfc", "svgattr", "svgelement", "webextapiref", "xsltref"],
+    "Sidebar": ["accessibilitysidebar", "addonsidebar", "addonsidebarmain", "apiref", "cssref", "defaultapisidebar", "firefoxsidebar", "gamessidebar", "glossarysidebar", "htmlsidebar", "httpsidebar", "jsref", "jssidebar", "learnsidebar", "mathmlref", "mdnsidebar", "pwasidebar", "svgref", "webassemblysidebar", "xsltsidebar"],
+    "List": ["apilistalpha", "landingpagelistsubpages", "listgroups", "listsubpages", "listsubpagesforsidebar", "next", "nextmenu", "previous", "previousmenu", "previousmenunext", "previousnext", "quicklinkswithsubpages", "subpageswithsummaries"],
+    "Component": ["compat", "css_ref", "cssinfo", "csssyntax", "csssyntaxraw", "firefox_for_developers", "glossarydisambiguation", "inheritancediagram", "js_property_attributes", "specifications", "svginfo", "webextallcompattables", "webextallexamples", "webextexamples"],
+    "Banner": ["availableinworkers", "deprecated_header", "non_standard_header", "seecompattable", "securecontext_header"],
+    "Badge": ["deprecated_inline", "experimental_inline", "experimentalbadge", "non_standard_inline", "non_standardbage", "optional_inline", "readonlyinline", "securecontext_inline"],
+    "Embed": ["embedghlivesample", "embedlivesample", "embedyoutube", "interactiveexample", "jsfiddleembed", "livesamplelink"],
+  };
+  const MACRO_OTHER = "Other / Unclassified";
+  const MACRO_TO_TYPE = new Map();
+  for (const [type, names] of Object.entries(MACRO_TYPES)) {
+    for (const n of names) MACRO_TO_TYPE.set(n.toLowerCase(), type);
+  }
+  const MACRO_TYPE_ORDER = [...Object.keys(MACRO_TYPES), MACRO_OTHER];
+  const macroTypeOf = v => MACRO_TO_TYPE.get(String(v).toLowerCase()) || MACRO_OTHER;
 
   const SEARCH_FIELDS = ["message", "filePath", "file", "url", "redirect", "source", "slug", "basepath", "templ", "sidebar"];
 
@@ -472,7 +512,7 @@
     refreshSelect($("category"), catCounts);
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
-    refreshSelect($("templ"), tmplCounts);
+    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER);
     const posSel = $("sourcepos");
     posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;

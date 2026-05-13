@@ -20,6 +20,7 @@ Then open <http://localhost:8000/> (or <http://localhost:8080/>). The page strea
 
 - Full-text search across message, file, URL, redirect, source, slug, basepath, macro, and sidebar (space-separated tokens, AND semantics).
 - Faceted dropdowns with live counts: **Category**, **Repository**, **Locale**, **Macro (templ)**, **Source position** (with/without line info).
+- The **Macro** filter groups macros by type (Link, Sidebar, List, Component, Banner, Badge, Embed, Other / Unclassified) as non-selectable dividers showing the total issue count per type.
 - "File path contains" substring filter.
 - Click any pill (repo, locale, macro, category) in a row to filter by that value.
 - **Reset** clears all filters; the button highlights whenever any filter is active.
