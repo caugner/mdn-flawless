@@ -108,7 +108,7 @@ jobs:
           set -eo pipefail
           npm run rari content sync-translated-content
           npm run rari git-history
-          npm run rari build -- --all --issues "$BUILD_OUT_ROOT/issues.json"
+          npm run rari build -- --all-available --issues "$BUILD_OUT_ROOT/issues.json"
           cp "$BUILD_OUT_ROOT/issues.json" "$GITHUB_WORKSPACE/site/issues.json"
 
       - name: Publish issues.json release
