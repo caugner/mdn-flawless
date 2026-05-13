@@ -362,11 +362,12 @@
   // option followed by indented member options. Group order follows `groupOrder`,
   // then any others alphabetically. `groupHeader` supplies the header's synthetic
   // value (e.g. `__link__`) and label.
-  function refreshSelect(sel, counts, groupOf, groupOrder, groupHeader) {
+  function refreshSelect(sel, counts, groupOf, groupOrder, groupHeader, suffixOptions) {
     const current = sel.value;
     while (sel.children.length > 1) sel.removeChild(sel.lastChild);
     const keys = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-    if (current && !counts.has(current) && !(groupHeader && groupHeader.isValue(current))) {
+    const isSuffix = v => suffixOptions && suffixOptions.some(p => p[0] === v);
+    if (current && !counts.has(current) && !(groupHeader && groupHeader.isValue(current)) && !isSuffix(current)) {
       keys.push(current);
     }
     const makeOpt = (v, text) => {
@@ -395,6 +396,7 @@
         }
       }
     }
+    if (suffixOptions) for (const [v, lbl] of suffixOptions) sel.appendChild(makeOpt(v, lbl));
     sel.value = current;
   }
 
@@ -434,7 +436,9 @@
     if (except !== "repo" && f.repo && it.repo !== f.repo) return false;
     if (except !== "locale" && f.loc && it.locale !== f.loc) return false;
     if (except !== "templ" && f.tmpl) {
-      if (isMacroTypeValue(f.tmpl)) {
+      if (f.tmpl === "none") {
+        if (it.templ) return false;
+      } else if (isMacroTypeValue(f.tmpl)) {
         if (!it.templ || macroTypeOf(it.templ) !== MACRO_VALUE_TO_TYPE.get(f.tmpl)) return false;
       } else if (it.templ !== f.tmpl) return false;
     }
@@ -517,20 +521,24 @@
     const repoCounts = new Map();
     const locCounts = new Map();
     const tmplCounts = new Map();
+    let noTempl = 0;
     let posWith = 0, posWithout = 0;
     for (const it of state.all) {
       if (passes(it, f, null)) state.filtered.push(it);
       if (it.sourceCategory && passes(it, f, "category")) catCounts.set(it.sourceCategory, (catCounts.get(it.sourceCategory) || 0) + 1);
       if (it.repo && passes(it, f, "repo")) repoCounts.set(it.repo, (repoCounts.get(it.repo) || 0) + 1);
       if (it.locale && passes(it, f, "locale")) locCounts.set(it.locale, (locCounts.get(it.locale) || 0) + 1);
-      if (it.templ && passes(it, f, "templ")) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
+      if (passes(it, f, "templ")) {
+        if (it.templ) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
+        else noTempl++;
+      }
       if (passes(it, f, "sourcepos")) { if (it.line) posWith++; else posWithout++; }
     }
 
     refreshSelect($("category"), catCounts);
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
-    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader);
+    refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader, [["none", `None (${noTempl.toLocaleString()})`]]);
     const posSel = $("sourcepos");
     posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
