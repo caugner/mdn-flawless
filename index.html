@@ -1049,25 +1049,21 @@
       return;
     }
 
-    // Stream the body so we can show real download progress.
-    const total = parseInt(res.headers.get("content-length") || "0", 10);
+    // Stream the body so we can show download progress. Content-Length reports the
+    // compressed size while the reader yields decompressed bytes, so we can't compute
+    // a reliable percentage — just show bytes received with an indeterminate bar.
     const reader = res.body && res.body.getReader ? res.body.getReader() : null;
     let text;
     if (reader) {
       const chunks = [];
       let received = 0;
-      if (total) bar.max = total; else bar.removeAttribute("value"); // indeterminate
+      bar.removeAttribute("value");
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
         received += value.length;
-        if (total) {
-          bar.value = received;
-          label.textContent = `Loading issues.json… ${fmtBytes(received)} / ${fmtBytes(total)} (${((received / total) * 100).toFixed(0)}%)`;
-        } else {
-          label.textContent = `Loading issues.json… ${fmtBytes(received)}`;
-        }
+        label.textContent = `Loading issues.json… ${fmtBytes(received)}`;
       }
       text = await new Blob(chunks).text();
     } else {
