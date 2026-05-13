@@ -931,6 +931,14 @@
     return parts;
   }
 
+  function mdInlineCode(s) {
+    const v = String(s ?? "");
+    let run = "`";
+    while (v.includes(run)) run += "`";
+    const pad = v.startsWith("`") || v.endsWith("`") ? " " : "";
+    return `${run}${pad}${v}${pad}${run}`;
+  }
+
   function mdCell(s) {
     return String(s ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
   }
@@ -946,7 +954,7 @@
     if (filters.length) {
       lines.push("");
       lines.push("**Filters:**");
-      for (const f of filters) lines.push(`- ${f.key}: ${f.value}`);
+      for (const f of filters) lines.push(`- ${f.key}: ${mdInlineCode(f.value)}`);
     }
     lines.push("");
     if (group) {
