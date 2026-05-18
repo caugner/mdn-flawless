@@ -210,6 +210,9 @@
     <label>Macro (templ)
       <select id="templ"><option value="">All</option></select>
     </label>
+    <label>Sidebar
+      <select id="sidebar"><option value="">All</option></select>
+    </label>
     <label>Source position
       <select id="sourcepos">
         <option value="">All</option>
@@ -466,6 +469,11 @@
         if (!it.templ || macroTypeOf(it.templ) !== MACRO_VALUE_TO_TYPE.get(f.tmpl)) return false;
       } else if (it.templ !== f.tmpl) return false;
     }
+    if (except !== "sidebar" && f.sb) {
+      if (f.sb === "none") {
+        if (it.sidebar) return false;
+      } else if (it.sidebar !== f.sb) return false;
+    }
     if (except !== "sourcepos" && f.pos === "yes" && !it.line) return false;
     if (except !== "sourcepos" && f.pos === "no" && it.line) return false;
     if (f.fp && !it.filePath.toLowerCase().includes(f.fp)) return false;
@@ -483,6 +491,7 @@
     ["repo", "repo"],
     ["locale", "locale"],
     ["templ", "templ"],
+    ["sidebar", "sidebar"],
     ["sourcepos", "pos"],
     ["filePath", "file"],
     ["groupBy", "group"],
@@ -523,19 +532,21 @@
       repo: $("repo").value,
       loc: $("locale").value,
       tmpl: $("templ").value,
+      sb: $("sidebar").value,
       pos: $("sourcepos").value,
       fp: $("filePath").value.trim().toLowerCase(),
       tokens: q ? q.split(/\s+/) : [],
     };
     writeInputsToHash();
     const group = $("groupBy").value;
-    $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.pos || f.fp || group || f.tokens.length));
+    $("reset").classList.toggle("active", !!(f.cat || f.repo || f.loc || f.tmpl || f.sb || f.pos || f.fp || group || f.tokens.length));
     $("groupBy").classList.toggle("active", !!group);
     $("q").classList.toggle("active", f.tokens.length > 0);
     $("category").classList.toggle("active", !!f.cat);
     $("repo").classList.toggle("active", !!f.repo);
     $("locale").classList.toggle("active", !!f.loc);
     $("templ").classList.toggle("active", !!f.tmpl);
+    $("sidebar").classList.toggle("active", !!f.sb);
     $("sourcepos").classList.toggle("active", !!f.pos);
     $("filePath").classList.toggle("active", !!f.fp);
 
@@ -545,7 +556,9 @@
     const repoCounts = new Map();
     const locCounts = new Map();
     const tmplCounts = new Map();
+    const sbCounts = new Map();
     let noTempl = 0;
+    let noSidebar = 0;
     let posWith = 0, posWithout = 0;
     for (const it of state.all) {
       if (passes(it, f, null)) state.filtered.push(it);
@@ -556,6 +569,10 @@
         if (it.templ) tmplCounts.set(it.templ, (tmplCounts.get(it.templ) || 0) + 1);
         else noTempl++;
       }
+      if (passes(it, f, "sidebar")) {
+        if (it.sidebar) sbCounts.set(it.sidebar, (sbCounts.get(it.sidebar) || 0) + 1);
+        else noSidebar++;
+      }
       if (passes(it, f, "sourcepos")) { if (it.line) posWith++; else posWithout++; }
     }
 
@@ -563,6 +580,7 @@
     refreshSelect($("repo"), repoCounts);
     refreshSelect($("locale"), locCounts);
     refreshSelect($("templ"), tmplCounts, macroTypeOf, MACRO_TYPE_ORDER, macroTypeHeader, noTempl ? [["none", `None (${noTempl.toLocaleString()})`]] : null);
+    refreshSelect($("sidebar"), sbCounts, null, null, null, noSidebar ? [["none", `None (${noSidebar.toLocaleString()})`]] : null);
     const posSel = $("sourcepos");
     posSel.options[1].textContent = `With (${posWith.toLocaleString()})`;
     posSel.options[2].textContent = `Without (${posWithout.toLocaleString()})`;
@@ -674,9 +692,10 @@
     return s;
   }
 
-  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory, childClass, fileColspan) {
+  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory, childClass, fileColspan) {
     const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
     const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
+    const sb = it.sidebar && !hideSidebar ? `<button type="button" class="pill" data-filter="sidebar" data-value="${escapeHtml(it.sidebar)}" aria-label="Filter by sidebar: ${escapeHtml(it.sidebar)}">${escapeHtml(it.sidebar)}</button>` : "";
     const slugText = highlight(it.slug, tokens);
     const slugLinked = it.locale && it.slug
       ? `<a href="https://developer.mozilla.org/${escapeHtml(mdnLocale(it.locale))}/docs/${escapeHtml(it.slug)}" target="_blank" rel="noopener">${slugText}</a>`
@@ -696,7 +715,7 @@
     return `<tr${childClass ? ` class="${childClass}"` : ""}>
       <td class="file"${fileColspan ? ` colspan="${fileColspan}"` : ""}>${fileCell}</td>
       ${catCell}
-      <td class="msg">${loc}${tmpl}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
+      <td class="msg">${loc}${tmpl}${sb}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
     </tr>`;
   }
 
@@ -741,16 +760,18 @@
     const hideLocale = !!$("locale").value;
     const templVal = $("templ").value;
     const hideTempl = !!templVal && !isMacroTypeValue(templVal);
+    const sbVal = $("sidebar").value;
+    const hideSidebar = !!sbVal && sbVal !== "none";
     const catVal = $("category").value;
     const hideCategory = !!catVal && !isCatKindValue(catVal);
 
     if (grouped) {
-      renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory);
+      renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideSidebar, hideCategory);
       return;
     }
 
     const slice = state.filtered.slice(start, start + ps);
-    const rows = slice.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideCategory)).join("");
+    const rows = slice.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory)).join("");
 
     const cols = hideCategory
       ? `<col style="width:42%"><col style="width:58%">`
@@ -801,7 +822,7 @@
     return `<button type="button" class="pill" data-filter="repo" data-value="${escapeHtml(it.repo)}" aria-label="Filter by repo: ${escapeHtml(it.repo)}">${escapeHtml(it.repo)}</button>`;
   }
 
-  function renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideCategory) {
+  function renderGrouped(content, start, ps, tokens, group, hideLocale, hideTempl, hideSidebar, hideCategory) {
     const slice = state.groups.slice(start, start + ps);
     const sampleColLabel = "Message";
     const rows = slice.map(g => {
@@ -817,7 +838,7 @@
         <td class="msg">${sampleMsg}</td>
       </tr>`;
       if (!expanded) return main;
-      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, true, "group-child", 2)).join("");
+      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, true, "group-child", 2)).join("");
       return main + children;
     }).join("");
 
@@ -888,7 +909,7 @@
       clearTimeout(qTimer);
       qTimer = setTimeout(onChange, 120);
     });
-    for (const id of ["category", "repo", "locale", "templ", "sourcepos", "groupBy"]) $(id).addEventListener("change", onChange);
+    for (const id of ["category", "repo", "locale", "templ", "sidebar", "sourcepos", "groupBy"]) $(id).addEventListener("change", onChange);
     $("pageSize").addEventListener("change", () => {
       state.pageSize = parseInt($("pageSize").value, 10) || 200;
       state.page = 0;
@@ -911,6 +932,7 @@
       $("repo").value = "";
       $("locale").value = "";
       $("templ").value = "";
+      $("sidebar").value = "";
       $("sourcepos").value = "";
       $("groupBy").value = "";
       state.sortKey = null;
