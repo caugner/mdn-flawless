@@ -158,6 +158,8 @@
   th[data-sort].asc::after, th[data-gsort].asc::after { content: " ↑"; opacity: 1; }
   th[data-sort].desc::after, th[data-gsort].desc::after { content: " ↓"; opacity: 1; }
   .pager { display: flex; gap: 6px; align-items: center; }
+  th.check-col, td.check-col { width: 28px; text-align: center; padding-right: 0; }
+  td.check-col input { cursor: pointer; }
   mark { background: #ffd54f; color: #000; }
   .github-fork {
     position: fixed;
@@ -188,7 +190,7 @@
     <label>File path contains
       <input type="text" id="filePath" placeholder="e.g. /en-us/web/css">
     </label>
-    <div class="field">Copy issues as
+    <div class="field"><span id="copyLabel">Copy issues as</span>
       <div class="btn-group">
         <button id="copyMd" title="Copy filtered list as Markdown table">Markdown</button>
         <button id="copyCsv" title="Copy filtered list as CSV">CSV</button>
@@ -270,7 +272,14 @@
     sortDir: 1,
     groupSortKey: "count",
     groupSortDir: -1,
+    selected: new Set(),
+    lastSelectedIdx: null,
   };
+
+  function clearSelection() {
+    state.selected.clear();
+    state.lastSelectedIdx = null;
+  }
 
   // Categorize a message into a coarse bucket. Keep the longest matching prefix.
   const CATEGORIES = [
@@ -588,6 +597,7 @@
     if (state.sortKey) sortFiltered();
     buildGroups();
     state.expanded.clear();
+    clearSelection();
     state.page = 0;
     render();
   }
@@ -692,7 +702,13 @@
     return s;
   }
 
-  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory, childClass, fileColspan) {
+  function checkCellHtml(selectId) {
+    if (selectId == null) return `<td class="check-col"></td>`;
+    const checked = state.selected.has(selectId) ? " checked" : "";
+    return `<td class="check-col"><input type="checkbox" data-select-id="${escapeHtml(String(selectId))}"${checked} aria-label="Select row"></td>`;
+  }
+
+  function issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory, childClass, fileColspan, selectId) {
     const loc = it.locale && !hideLocale ? `<button type="button" class="pill" data-filter="locale" data-value="${escapeHtml(it.locale)}" aria-label="Filter by locale: ${escapeHtml(it.locale)}">${escapeHtml(it.locale)}</button>` : "";
     const tmpl = it.templ && !hideTempl ? `<button type="button" class="pill" data-filter="templ" data-value="${escapeHtml(it.templ)}" aria-label="Filter by macro: ${escapeHtml(it.templ)}">${escapeHtml(it.templ)}</button>` : "";
     const sb = it.sidebar && !hideSidebar ? `<button type="button" class="pill" data-filter="sidebar" data-value="${escapeHtml(it.sidebar)}" aria-label="Filter by sidebar: ${escapeHtml(it.sidebar)}">${escapeHtml(it.sidebar)}</button>` : "";
@@ -713,6 +729,7 @@
       : `${repoPill}${pathHtml}`;
     const catCell = hideCategory ? "" : `<td><button type="button" class="pill" data-filter="category" data-value="${escapeHtml(it.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(it.sourceCategory)}">${escapeHtml(it.sourceCategory)}</button></td>`;
     return `<tr${childClass ? ` class="${childClass}"` : ""}>
+      ${checkCellHtml(selectId)}
       <td class="file"${fileColspan ? ` colspan="${fileColspan}"` : ""}>${fileCell}</td>
       ${catCell}
       <td class="msg">${loc}${tmpl}${sb}${highlight(it.message, tokens)}${slug}${url}${redirect}</td>
@@ -748,6 +765,7 @@
       : "—";
     $("prev").disabled = state.page <= 0;
     $("next").disabled = state.page >= pages - 1;
+    updateCopyLabel();
 
     const tokens = $("q").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const content = $("content");
@@ -771,21 +789,23 @@
     }
 
     const slice = state.filtered.slice(start, start + ps);
-    const rows = slice.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory)).join("");
+    const rows = slice.map((it, i) => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, hideCategory, null, null, start + i)).join("");
 
     const cols = hideCategory
-      ? `<col style="width:42%"><col style="width:58%">`
-      : `<col style="width:38%"><col style="width:18%"><col style="width:44%">`;
+      ? `<col style="width:28px"><col style="width:42%"><col style="width:58%">`
+      : `<col style="width:28px"><col style="width:38%"><col style="width:18%"><col style="width:44%">`;
     const catHead = hideCategory ? "" : `<th data-sort="sourceCategory" class="${sortClass('sourceCategory')}" tabindex="0" role="button" aria-sort="${ariaSort('sourceCategory')}">Category</th>`;
     content.innerHTML = `<table>
       <colgroup>${cols}</colgroup>
       <thead><tr>
+        <th class="check-col"><input type="checkbox" id="selectAll" aria-label="Select all"></th>
         <th data-sort="filePath" class="${sortClass('filePath')}" tabindex="0" role="button" aria-sort="${ariaSort('filePath')}">File</th>
         ${catHead}
         <th data-sort="message" class="${sortClass('message')}" tabindex="0" role="button" aria-sort="${ariaSort('message')}">Message</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+    updateSelectAllCheckbox();
 
     for (const th of content.querySelectorAll("th[data-sort]")) {
       const activate = () => {
@@ -793,6 +813,7 @@
         if (state.sortKey === k) state.sortDir = -state.sortDir;
         else { state.sortKey = k; state.sortDir = 1; }
         sortFiltered();
+        clearSelection();
         render();
       };
       th.addEventListener("click", activate);
@@ -833,26 +854,29 @@
       const sampleCat = (hideCategory || !sample) ? "" : `<button type="button" class="pill" data-filter="category" data-value="${escapeHtml(sample.sourceCategory)}" aria-label="Filter by category: ${escapeHtml(sample.sourceCategory)}">${escapeHtml(sample.sourceCategory)}</button> `;
       const sampleMsg = sample ? `${sampleCat}${highlight(sample.message || sample.source || "", tokens)}` : "";
       const main = `<tr>
+        ${checkCellHtml(g.key)}
         <td class="file">${repoPill}${toggle}</td>
         <td class="count">${g.count.toLocaleString()}</td>
         <td class="msg">${sampleMsg}</td>
       </tr>`;
       if (!expanded) return main;
-      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, true, "group-child", 2)).join("");
+      const children = g.items.map(it => issueRowHtml(it, tokens, hideLocale, hideTempl, hideSidebar, true, "group-child", 2, null)).join("");
       return main + children;
     }).join("");
 
-    const cols = `<col style="width:50%"><col style="width:10%"><col style="width:40%">`;
+    const cols = `<col style="width:28px"><col style="width:50%"><col style="width:10%"><col style="width:40%">`;
     const keyLabel = GROUP_LABELS[group];
     content.innerHTML = `<table>
       <colgroup>${cols}</colgroup>
       <thead><tr>
+        <th class="check-col"><input type="checkbox" id="selectAll" aria-label="Select all"></th>
         <th data-gsort="key" class="${groupSortClass('key')}" tabindex="0" role="button" aria-sort="${groupAriaSort('key')}">${escapeHtml(keyLabel)}</th>
         <th data-gsort="count" class="${groupSortClass('count')}" tabindex="0" role="button" aria-sort="${groupAriaSort('count')}">Count</th>
         <th>${escapeHtml(sampleColLabel)}</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+    updateSelectAllCheckbox();
 
     for (const th of content.querySelectorAll("th[data-gsort]")) {
       const activate = () => {
@@ -860,6 +884,7 @@
         if (state.groupSortKey === k) state.groupSortDir = -state.groupSortDir;
         else { state.groupSortKey = k; state.groupSortDir = k === "count" ? -1 : 1; }
         sortGroups();
+        clearSelection();
         render();
       };
       th.addEventListener("click", activate);
@@ -898,6 +923,99 @@
     return state.sortDir > 0 ? "ascending" : "descending";
   }
 
+  function isGrouped() { return !!$("groupBy").value; }
+  function currentTotal() { return isGrouped() ? state.groups.length : state.filtered.length; }
+  function currentUnit() { return isGrouped() ? "groups" : "issues"; }
+
+  function selectedItems() {
+    if (!state.selected.size) return state.filtered;
+    return [...state.selected].sort((a, b) => a - b).map(i => state.filtered[i]);
+  }
+  function selectedGroups() {
+    if (!state.selected.size) return state.groups;
+    return state.groups.filter(g => state.selected.has(g.key));
+  }
+
+  function updateSelectAllCheckbox() {
+    const cb = $("selectAll");
+    if (!cb) return;
+    const total = currentTotal();
+    const n = state.selected.size;
+    cb.checked = total > 0 && n === total;
+    cb.indeterminate = n > 0 && n < total;
+  }
+
+  function updateCopyLabel() {
+    const el = $("copyLabel");
+    if (!el) return;
+    const total = currentTotal();
+    const n = state.selected.size;
+    const unit = currentUnit();
+    el.textContent = n
+      ? `Copy ${n.toLocaleString()} selected ${unit} as`
+      : `Copy all ${total.toLocaleString()} ${unit} as`;
+  }
+
+  function selectIdFromCheckbox(cb) {
+    const raw = cb.dataset.selectId;
+    return isGrouped() ? raw : Number(raw);
+  }
+
+  function visibleSelectIds() {
+    const cbs = $("content").querySelectorAll('input[type=checkbox][data-select-id]');
+    return Array.from(cbs).map(cb => selectIdFromCheckbox(cb));
+  }
+
+  function handleRowCheck(cb, shift) {
+    const id = selectIdFromCheckbox(cb);
+    if (shift && state.lastSelectedIdx != null) {
+      const ids = visibleSelectIds();
+      const a = ids.indexOf(state.lastSelectedIdx);
+      const b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const target = cb.checked;
+        for (let i = lo; i <= hi; i++) {
+          const rid = ids[i];
+          if (target) state.selected.add(rid);
+          else state.selected.delete(rid);
+        }
+        for (const c of $("content").querySelectorAll('input[type=checkbox][data-select-id]')) {
+          c.checked = state.selected.has(selectIdFromCheckbox(c));
+        }
+        state.lastSelectedIdx = id;
+        updateSelectAllCheckbox();
+        updateCopyLabel();
+        return;
+      }
+    }
+    if (cb.checked) state.selected.add(id);
+    else state.selected.delete(id);
+    state.lastSelectedIdx = id;
+    updateSelectAllCheckbox();
+    updateCopyLabel();
+  }
+
+  function handleSelectAll(cb) {
+    const total = currentTotal();
+    if (state.selected.size === total) {
+      state.selected.clear();
+    } else {
+      state.selected.clear();
+      if (isGrouped()) {
+        for (const g of state.groups) state.selected.add(g.key);
+      } else {
+        for (let i = 0; i < state.filtered.length; i++) state.selected.add(i);
+      }
+    }
+    for (const c of $("content").querySelectorAll('input[type=checkbox][data-select-id]')) {
+      c.checked = state.selected.has(selectIdFromCheckbox(c));
+    }
+    state.lastSelectedIdx = null;
+    updateSelectAllCheckbox();
+    updateCopyLabel();
+  }
+
   function bind() {
     const onChange = () => applyFilters();
     let qTimer;
@@ -916,6 +1034,9 @@
       render();
     });
     $("content").addEventListener("click", e => {
+      const cb = e.target.closest('input[type=checkbox][data-select-id]');
+      if (cb) { handleRowCheck(cb, e.shiftKey); return; }
+      if (e.target.id === "selectAll") { handleSelectAll(e.target); return; }
       const btn = e.target.closest("button.pill[data-filter]");
       if (!btn) return;
       const sel = $(btn.dataset.filter);
@@ -966,13 +1087,19 @@
   }
 
   function buildMarkdown() {
+    const items = selectedItems();
+    const groups = selectedGroups();
     const total = state.filtered.length;
     const filters = activeFilters();
     const group = $("groupBy").value;
     const catVal = $("category").value;
     const hideCategory = !!catVal && !isCatKindValue(catVal);
     const lines = [];
-    lines.push(`[${total.toLocaleString()} issues — live view](${location.href})`);
+    const n = state.selected.size;
+    const heading = n
+      ? `[${n.toLocaleString()} of ${(group ? state.groups.length : total).toLocaleString()} ${currentUnit()} — live view](${location.href})`
+      : `[${total.toLocaleString()} issues — live view](${location.href})`;
+    lines.push(heading);
     if (filters.length) {
       lines.push("");
       lines.push("**Filters:**");
@@ -983,14 +1110,14 @@
       const label = GROUP_LABELS[group];
       lines.push(`| ${label} | Count |`);
       lines.push("|---|---:|");
-      for (const g of state.groups) lines.push(`| ${mdCell(g.key)} | ${g.count} |`);
+      for (const g of groups) lines.push(`| ${mdCell(g.key)} | ${g.count} |`);
       return lines.join("\n");
     }
     const header = hideCategory ? "| File | Slug | Message |" : "| Category | File | Slug | Message |";
     const sep = hideCategory ? "|---|---|---|" : "|---|---|---|---|";
     lines.push(header);
     lines.push(sep);
-    for (const it of state.filtered) {
+    for (const it of items) {
       const lineCol = it.line ? `:${it.line}${it.col ? ":" + it.col : ""}` : "";
       const fileLabel = `${it.filePath || ""}${lineCol}`;
       const gh = githubUrl(it);
@@ -1020,12 +1147,12 @@
     const group = $("groupBy").value;
     if (group) {
       const rows = [[GROUP_LABELS[group].toLowerCase().replace(/\s+/g, "_"), "count"].join(",")];
-      for (const g of state.groups) rows.push([csvField(g.key), g.count].join(","));
+      for (const g of selectedGroups()) rows.push([csvField(g.key), g.count].join(","));
       return rows.join("\r\n");
     }
     const cols = ["repo", "file", "line", "col", "locale", "category", "templ", "message", "slug", "url", "redirect", "github_url"];
     const rows = [cols.join(",")];
-    for (const it of state.filtered) {
+    for (const it of selectedItems()) {
       rows.push([
         it.repo, it.filePath, it.line ?? "", it.col ?? "",
         it.locale, it.sourceCategory, it.templ, it.message,
@@ -1036,7 +1163,7 @@
   }
 
   function buildJson() {
-    const items = state.filtered.map(it => ({
+    const items = selectedItems().map(it => ({
       repo: it.repo || "",
       file: it.filePath || "",
       line: it.line ?? null,
@@ -1058,7 +1185,7 @@
     try {
       const text = build();
       await navigator.clipboard.writeText(text);
-      const n = $("groupBy").value ? state.groups.length : state.filtered.length;
+      const n = state.selected.size || ($("groupBy").value ? state.groups.length : state.filtered.length);
       btn.textContent = `Copied ${n.toLocaleString()}`;
     } catch (e) {
       btn.textContent = "Copy failed";
