@@ -297,6 +297,12 @@
     "Error: could not find syntax",
     "redirected",
   ];
+  // Sources named with three or more kebab segments (e.g. `templ-ill-cased-arg`)
+  // are already specific checks, and their messages embed the offending argument,
+  // which would explode into one category per argument. Categorize them by source
+  // alone. Coarser sources (e.g. `image-check`) keep their per-message categories.
+  const SPECIFIC_SOURCE_RE = /^[a-z0-9]+(?:-[a-z0-9]+){2,}$/;
+
   function categorize(msg) {
     if (!msg) return "(none)";
     for (const p of CATEGORIES) if (msg.startsWith(p)) return p;
@@ -356,9 +362,10 @@
         const message = stripPathPrefix(fields.message || "");
         const source = fields.source || "";
         // When a source has no message (e.g. broken-link), the source IS the category.
-        const category = message ? categorize(message) : (source || "(none)");
-        const sourceCategory = source && message ? `${source}: ${category}` : category;
-        const categoryKind = message ? CAT_KIND_MSG : CAT_KIND_TYPE;
+        const bySource = !message || SPECIFIC_SOURCE_RE.test(source);
+        const category = bySource ? (source || "(none)") : categorize(message);
+        const sourceCategory = bySource || !source ? category : `${source}: ${category}`;
+        const categoryKind = bySource ? CAT_KIND_TYPE : CAT_KIND_MSG;
         if (!CATEGORY_TO_KIND.has(sourceCategory)) CATEGORY_TO_KIND.set(sourceCategory, categoryKind);
         const locale = spans.locale || "";
         out.push({
