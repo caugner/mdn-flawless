@@ -64,7 +64,7 @@ Each row in `issues.json` is flattened into a single record with the following f
 | `repo` | Derived from the path: `content`, `translated-content`, `translated-content-de` (when locale is `de`), or `curriculum`. |
 | `filePath` | Path to the source `.md` file, normalized to start at `content/`, `translated-content/`, or `curriculum/curriculum/` (absolute prefix from the linter run is stripped). |
 | `file` | The file the linter actually parsed. Usually equal to `filePath`. |
-| `line` / `col` / `endLine` / `endCol` | 0-based source position. Converted to 1-based GitHub anchors (`L11C96-L11C155`) for blob links. |
+| `line` / `col` / `endLine` / `endCol` | 1-based source position, with `endCol` inclusive. Used as-is for GitHub anchors (`L11C96-L11C155`), except `endCol`, which is incremented because GitHub's end anchor is exclusive. |
 
 ### Issue content
 
